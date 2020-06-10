@@ -1,5 +1,6 @@
 ; 低级视频服务
 
+; 功能：清除屏幕
 VS_ClearScreen:         ; 清除屏幕
     push    ax
     push    bx
@@ -16,7 +17,8 @@ VS_ClearScreen:         ; 清除屏幕
     pop     ax
     ret
 
-VS_SetFocus:            ; 设置光标焦点
+; 功能：设置光标焦点
+VS_SetFocus:
     push    ax
     push    bx
     push    dx
@@ -29,7 +31,10 @@ VS_SetFocus:            ; 设置光标焦点
     pop     ax
     ret
 
-VS_Print:               ; 显示一个字符串，cx表示字符串长度，es:bp表示字符串内存地址
+; 功能：显示一个字符串
+; cx=字符串长度
+; es:bp=字符串内存地址
+VS_Print:
     push    ax
     push    bx
     push    cx
