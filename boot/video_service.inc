@@ -33,18 +33,22 @@ VS_SetFocus:
 
 ; 功能：显示一个字符串
 ; cx=字符串长度
-; es:bp=字符串内存地址
+; es:si=字符串内存地址
 VS_Print:
+    push    bp
+    mov     bp,     sp
+    push    si
     push    ax
     push    bx
-    push    cx
     push    dx
-    mov     ax, 1301h
-    mov     bx, 000fh
-    mov     dx, 0
+    mov     bp,     si          ; int 10h中es:bp表示目的位置
+    mov     ax,     1301h
+    mov     bx,     000fh
+    mov     dx,     0
     int     10h
+    pop     si
     pop     dx
-    pop     cx
     pop     bx
     pop     ax
+    pop     bp
     ret

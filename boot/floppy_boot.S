@@ -7,8 +7,8 @@
 ; 基址
 StackSeg equ 0x0001
 StackBase equ 0x7c00
-TempSeg equ 0x0002
-TempBase equ 0x0000
+TempSeg equ 0x0001
+TempBase equ 0x8000
 org 0x7c00
 
 jmp Main
@@ -35,7 +35,7 @@ Main:                                                       ; cs此时为0x0000�
     mov         sp,                 StackBase               ; 堆栈基地址 ss:sp = 0x17c00
     call        VS_ClearScreen
     call        VS_SetFocus
-    jmp         Search_NotFound
+    jmp         Search_Loader_Begin
 
 ; 开始从根目录检索启动程序loader
     sector      dw                  StartSectorOfRootDir    ; 当前根目录搜索扇区
@@ -43,15 +43,15 @@ Main:                                                       ; cs此时为0x0000�
 
 Search_Loader_Begin:
     cmp         word [sectorLoop],  0
-    call        Search_NotFound                             ; 找遍所有根目录扇区，没有找到
+    jz          Search_NotFound                             ; 找遍所有根目录扇区，没有找到
     dec         word [sectorLoop]                           ; --sectorLoop
     
     mov         ax,                 TempSeg
     mov         es,                 ax
-    mov         bx,                 TempBase                ; 0x20000 作为临时区域
+    mov         bx,                 TempBase                ; 0x10000 作为临时区域
     mov         ax,                 [sector]
     mov         cl,                 1
-    call        FS_ReadSector                               ; 从[sector]读取1个扇区，保存到TempSeg:TempBase (0x20000)
+    call        FS_ReadSector                               ; 从[sector]读取1个扇区，保存到TempSeg:TempBase (0x10000)
     mov         si,                 LoaderName
     mov         di,                 TempBase                ; 临时存放区域
     cld                                                     ; 清除DF，LODSB时递增
@@ -86,19 +86,22 @@ Search_Next_Sector_RootDir:
     inc         word [sector]
     jmp         Search_Loader_Begin
 
-
-; TODO 准备开始比较了
-
-jmp         Search_Loader_Begin
-
 Search_NotFound:
-    mov         bp,                 NotFound
+    push        ax
+    xor         ax,                 ax
+    mov         es,                 ax
+    pop         ax
+    mov         si,                 NotFound
     mov         cx,                 NotFoundLen
     call        VS_Print
     jmp         $                                           ; 死循环
 
 Search_FileName_Found:
-    mov         bp,                 Found
+    push        ax
+    xor         ax,                 ax
+    mov         es,                 ax
+    pop         ax
+    mov         si,                 Found
     mov         cx,                 FoundLen
     call        VS_Print
 

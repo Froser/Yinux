@@ -23,6 +23,7 @@ FS_ReadSector:
 
     push    bp
     mov     bp,     sp
+
     sub     esp,    2               ; 分配2个字节空间
     mov     byte    [bp - 2],   cl
     push    bx
