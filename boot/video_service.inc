@@ -1,7 +1,7 @@
 ; 低级视频服务
 
 ; 功能：清除屏幕
-VS_ClearScreen:         ; 清除屏幕
+VS_ClearScreen:
     push    ax
     push    bx
     push    cx
