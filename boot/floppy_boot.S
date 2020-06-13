@@ -97,13 +97,20 @@ Search_NotFound:
     jmp         $                                           ; 死循环
 
 Search_FileName_Found:
-    push        ax
     xor         ax,                 ax
     mov         es,                 ax
-    pop         ax
     mov         si,                 Found
     mov         cx,                 FoundLen
     call        VS_Print
+
+;    mov         ax,                 SectorsOfRootDir
+;    and         di,                 0ffe0h                  ; 清除低5位
+;    add         di,                 01ah                    ; 获取簇号DIR_FstClus
+;    mov         cx,                 word [es:di]
+;    push        cx
+;    add         cx,                 ax
+;    add         cx,                 SectorBalance
+
 
 ; 填充扇区
 times   510 - ($ - $$) db 0

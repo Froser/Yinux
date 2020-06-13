@@ -1,6 +1,6 @@
 ; FAT12基本定义
 BS_OEMName              db      'YinuxFlp'      ; OEM厂商
-BPB_BytsPerSec          dw      200h            ; 一个扇区的大小 (512字节)
+BPB_BytesPerSec         dw      200h            ; 一个扇区的大小 (512字节)
 BPB_SecPerClus          db      1               ; 每个簇的扇区数量
 BPB_RsvdSecCnt          dw      1               ; 保留扇区数
 BPB_NumFATs             db      2               ; FAT表总数
@@ -23,3 +23,4 @@ BS_FileSysType          db      'FAT12   '      ; 文件系统类型
 SectorsOfRootDir        equ     14              ; 根目录所占扇区
 StartSectorOfRootDir    equ     19              ; 根目录起始扇区
 SectorFAT1              equ     1               ; FAT1起始扇区
+SectorBalance           equ     17              ; 计算FAT扇区的偏移值

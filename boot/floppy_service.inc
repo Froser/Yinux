@@ -22,28 +22,81 @@ FS_ReadSector:
 ; cf=成功则复位
 
     push    bp
-    mov     bp,     sp
+    mov     bp,         sp
 
-    sub     esp,    2               ; 分配2个字节空间
-    mov     byte    [bp - 2],   cl
+    sub     esp,        2               ; 分配2个字节空间
+    mov     byte [bp-2] ,   cl
     push    bx
-    mov     bl,     [BPB_SecPerTrk]
-    div     bl                      ; 表示al/[BPB_SecPerTrk]，获得al=目标磁头号，ah=起始扇区号 - 1
+    mov     bl,         [BPB_SecPerTrk]
+    div     bl                          ; 表示al/[BPB_SecPerTrk]，获得al=目标磁头号，ah=起始扇区号 - 1
     inc     ah
-    mov     cl,     ah              ; 起始扇区号
-    mov     dh,     al
-    and     dh,     1               ; 磁头号
-    shr     al,     1
-    mov     ch,     al              ; 柱面号
+    mov     cl,         ah              ; 起始扇区号
+    mov     dh,         al
+    and     dh,         1               ; 磁头号
+    shr     al,         1
+    mov     ch,         al              ; 柱面号
     pop     bx
-    mov     dl,     [BS_DrvNum]     ; 驱动器号
+    mov     dl,         [BS_DrvNum]     ; 驱动器号
 
 _FS_ReadSector_Continue:
-    mov     ah,     2
-    mov     al,     byte    [bp - 2]; 读取扇区数
+    mov     ah,         2
+    mov     al,         byte    [bp - 2]; 读取扇区数
     int     13h
     jc      _FS_ReadSector_Continue
 
-    add     esp,    2               ; 释放临时变量
+    add     esp,        2               ; 释放临时变量
+    pop     bp
+    ret
+
+
+
+; 功能：获取FAT表项，得到下一个FAT表项
+; ah=FAT表项号
+; 返回：
+; ah=FAT下一个表项号
+VS_TempSeg equ 0x0001
+VS_TempBase equ 0x8000
+
+; 临时变量
+Odd         db          0
+
+VS_GetFATEntry:
+    push    bp
+    mov     bp,         sp
+    push    es
+    push    bx
+    push    ax
+    mov     ax,         VS_TempSeg      ; 临时段
+    mov     es,         ax              ; 设置输出地址段
+    pop     ax
+    mov     byte [Odd], 0
+    mov     bx,         3
+    mul     bx,
+    mov     bx,         2
+    div     bx
+    cmp     dx,         0
+    jz      _VS_GetFatEntry_Even
+    mov     byte [Odd], 1
+_VS_GetFatEntry_Even:
+    xor     dx,         dx
+    mov     bx,         [BPB_BytesPerSec]
+    div     bx
+    push    dx                           ; 缓存dx，因为接下来调用FS_ReadSector会改变它
+    mov     bx,         VS_TempBase      ; VS_TempBase作为临时区域
+    add     ax,         SectorFAT1
+    mov     cl,         2
+    call    FS_ReadSector
+
+    pop     dx
+    add     bx,         dx
+    mov     ax,         [es:bx]
+    cmp     byte [Odd], 1
+    jnz     _VS_GetFatEntry_Even2
+    shr     ax,         4
+
+_VS_GetFatEntry_Even2:
+    and     ax,         0fffh           ; 获取12bits表项
+    pop     bx
+    pop     es
     pop     bp
     ret
