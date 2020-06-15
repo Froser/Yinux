@@ -47,10 +47,10 @@ Yinux_Check_StaticSize(FS_FAT12_RootDir, 32);
 /* 操作FAT12相关函数 */
 typedef enum
 {
-    Error_Success = 0,
-    Error_IO,
-    Error_Memory,
-    Error_Size,
+    FS_FAT12_Error_Success = 0,
+    FS_FAT12_Error_IO,
+    FS_FAT12_Error_Memory,
+    FS_FAT12_Error_Size,
 } FS_FAT12_CreateError;
 
 typedef struct FS_FAT12_CreateHandle_t

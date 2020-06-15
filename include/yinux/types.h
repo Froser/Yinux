@@ -1,5 +1,6 @@
 #pragma once
 /* 类型信息 */
+#include <stdbool.h>
 
 #ifdef _MSC_VER
 #define Yinux_Check_StaticSize(type, expected) \
