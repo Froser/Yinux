@@ -1,7 +1,10 @@
 ﻿/* FAT12基本定义 */
+#pragma once
+#define _CRT_SECURE_NO_WARNINGS
+#include <stdio.h>
 #include "../../include/yinux/types.h"
 
-typedef YINUX_PACKED_STRUCT(FAT12_t)
+typedef YINUX_PACKED_STRUCT(FS_FAT12_t)
 {
     DB BS_jmpBoot[3];       // 3字节跳转指令
     DB BS_OEMName[8];       // OEM厂商
@@ -23,12 +26,12 @@ typedef YINUX_PACKED_STRUCT(FAT12_t)
     DD BS_VolID;            // 卷序列号
     DB BS_VolLab[8];        // 卷标
     DB BS_FileSysType[11];  // 文件系统类型
-} FAT12;
+} FS_FAT12;
 YUNUX_PACKED_END();
 
-Yinux_Check_StaticSize(FAT12, 62);
+Yinux_Check_StaticSize(FS_FAT12, 62);
 
-typedef struct FAT12RootDir_t
+typedef struct FS_FAT12_RootDir_t
 {
     DB DIR_Name[11];        // 根目录名
     DB DIR_Attr;            // 文件属性
@@ -37,6 +40,29 @@ typedef struct FAT12RootDir_t
     DW DIR_WrtDate;         // 写入日期
     DW DIR_FstClus;         // 起始簇号
     DD DIR_FileSize;        // 文件大小
-} FAT12RootDir;
+} FS_FAT12_RootDir;
 
-Yinux_Check_StaticSize(FAT12RootDir, 32);
+Yinux_Check_StaticSize(FS_FAT12_RootDir, 32);
+
+/* 操作FAT12相关函数 */
+typedef enum
+{
+    Error_Success = 0,
+    Error_IO,
+    Error_Memory,
+    Error_Size,
+} FS_FAT12_CreateError;
+
+typedef struct FS_FAT12_CreateHandle_t
+{
+    FS_FAT12_CreateError err;
+    FILE* file;
+    DB* const buffer;
+} FS_FAT12_CreateHandle;
+
+FS_FAT12_CreateHandle FS_FAT12_Create(const char* filename);
+FS_FAT12_CreateError FS_FAT12_Close(FS_FAT12_CreateHandle* handle);
+
+FS_FAT12_CreateError FS_FAT12_InjectBootFromFile(FS_FAT12_CreateHandle* handle, const char* filename);
+FS_FAT12_CreateError FS_FAT12_CreateRootFileFromFileName(FS_FAT12_CreateHandle* handle, const char* filename, const char* fileSource);
+FS_FAT12_CreateError FS_FAT12_CreateRootFileFromBinary(FS_FAT12_CreateHandle* handle, const char* filename, const DB* data, size_t fileLength);
