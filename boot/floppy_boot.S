@@ -11,8 +11,7 @@ TempSeg equ 0x0001
 TempBase equ 0x8000
 org 0x7c00
 
-jmp Main
-nop                                                         ; 3字节跳转
+jmp Main                                                    ; 3字节跳转
 
 ; 引入
 %include "floppy_service.inc"                               ; 引入FAT12描述头，以及软驱磁盘服务
@@ -21,7 +20,7 @@ nop                                                         ; 3字节跳转
 ; 常量区
 NotFound        db      "Loader not found"
 NotFoundLen     equ     $ - NotFound
-LoaderName      db      "loader.bin"
+LoaderName      db      "loader  bin"
 LoaderNameLen   equ     $ - LoaderName
 Found           db      "loader.bin found"
 FoundLen        equ     $ - Found

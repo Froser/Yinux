@@ -9,7 +9,7 @@ nasm loader.S -o ../bin/loader.bin
 
 FILE=../bin/create_floppy_boot
 if test -f "$FILE"; then
-	../bin/create_floppy_boot ../bin/boot.bin ../bin/loader.bin ../bin/boot.img
+	../bin/create_floppy_boot ../bin/boot.bin ../bin/loader.bin loader.bin ../bin/boot.img
 else
     echo "$FILE not exists. Please make create_floppy_boot first."
 fi

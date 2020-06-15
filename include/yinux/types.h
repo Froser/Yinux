@@ -1,8 +1,22 @@
 #pragma once
 /* 类型信息 */
 
+#ifdef _MSC_VER
 #define Yinux_Check_StaticSize(type, expected) \
-	static_assert(sizeof(type) == expected, "size incorrect")
+    static_assert(sizeof(type) == expected, "size incorrect")
+#else
+#define Yinux_Check_StaticSize(type, expected)
+#endif
+
+#ifdef _MSC_VER
+#  define YINUX_PACKED_STRUCT(name) \
+    __pragma(pack(push, 1)) struct name
+#  define YUNUX_PACKED_END() \
+    __pragma(pack(pop))
+#elif defined(__GNUC__)
+#  define YINUX_PACKED_STRUCT(name) struct __attribute__((packed)) name
+#  define YUNUX_PACKED_END()
+#endif
 
 typedef unsigned char DB;
 Yinux_Check_StaticSize(DB, 1);
