@@ -104,22 +104,22 @@ static DW clusterFromFATIndex(DB* imgBuffer, int fatTableOffset, int fatIndex)
 
 static void setClusterFromFATIndex(FS_FAT12_CreateHandle* handle, int fatIndex, int cluster)
 {
-    assert(cluster < 0xFF7);
+    assert(cluster <= 0xFFF);
     FS_FAT12* fat12Image = (FS_FAT12*)handle->buffer;
     for (int i = 0; i < fat12Image->BPB_NumFATs; ++i)
     {
         int fatTableOffset = (1 + i * fat12Image->BPB_FATSz16) * fat12Image->BPB_BytesPerSec;
         DB* ptr = handle->buffer + fatTableOffset + byteOffsetFromFATIndex(fatIndex);
-        DW dwIndex = (DW) fatIndex;
+        DW dwCluster = (DW)cluster;
         if (fatIndex & 1)
         {
-            ptr[0] = (dwIndex << 8 >> 8) | (ptr[0] & 0x0F);
-            ptr[1] = dwIndex >> 4;
+            ptr[0] = (dwCluster << 8 >> 8) | (ptr[0] & 0x0F);
+            ptr[1] = dwCluster >> 4;
         }
         else
         {
-            ptr[0] = dwIndex << 4 >> 4;
-            ptr[1] = (ptr[1] & 0xF0) | (dwIndex >> 8);
+            ptr[0] = dwCluster << 4 >> 4;
+            ptr[1] = (ptr[1] & 0xF0) | (dwCluster >> 8);
         }
     }
 }
@@ -133,20 +133,21 @@ static void availableCluster(FS_FAT12_CreateHandle* handle, int* nextCluster, in
     const int startIndex = 2;
     const int maxIndex = fatIndexFromByteOffset(fatSectors * fat12Image->BPB_BytesPerSec);
     int index = startIndex;
-    int clusterCandidate = 0x02;
+    int maxCluster = 0x01;
     while (index < maxIndex)
     {
         DW cluster = clusterFromFATIndex(handle->buffer, offset, index);
         if (cluster < 0xFF7)
         {
-            if (clusterCandidate < cluster)
-                clusterCandidate = cluster;
+            if (maxCluster < cluster)
+                maxCluster = cluster;
         }
         if (cluster == 0x00)
             break;
+        ++index;
     }
     if (nextCluster)
-        *nextCluster = clusterCandidate;
+        *nextCluster = maxCluster + 1;
     if (fatIndex)
         *fatIndex = index;
 }
@@ -278,13 +279,19 @@ FS_FAT12_CreateError FS_FAT12_CreateRootFileFromBinary(FS_FAT12_CreateHandle* ha
         int clusCnt = clusNum;
         while (clusCnt--)
         {
-            setClusterFromFATIndex(handle, fatIndex++, cluster);
+            if (!clusCnt)
+                cluster = 0xFFF;
+
+            setClusterFromFATIndex(handle, fatIndex, cluster);
+
             /* 获取写入的位置。注意，FAT1和FAT2占用了头2个簇 */
             DB* dest = handle->buffer + offsetData + (cluster - fat12Image->BPB_NumFATs);
             DW len = clusRemains ? clusRemains : fat12Image->BPB_BytesPerSec * fat12Image->BPB_SecPerClus;
             memcpy(dest, data, len);
 
-            ++cluster;
+            /* 迭代，寻找下一个可用簇及FAT索引 */
+            availableCluster(handle, &cluster, &fatIndex);
+            assert(cluster <= 0xFFF);
         }
     }
     return err;
