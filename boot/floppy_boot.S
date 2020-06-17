@@ -24,10 +24,10 @@ jmp Main                                                    ; 3字节跳转
 %include "video_service.inc"                                ; 引入低级视频服务
 
 ; 常量区
-NotFound        db      "Loader not found"
-NotFoundLen     equ     $ - NotFound
-LoaderName      db      "loader  bin"
-LoaderNameLen   equ     $ - LoaderName
+NOT_FOUND       db      "Loader not found"
+NotFoundLen     equ     $ - NOT_FOUND
+LOADER_NAME     db      "loader  bin"
+LoaderNameLen   equ     $ - LOADER_NAME
 
 Main:                                                       ; cs此时为0x0000，ip此时为0x7c00
     mov         ax,                 cs                      ; 初始化ds, es, ss, sp
@@ -41,21 +41,21 @@ Main:                                                       ; cs此时为0x0000�
     jmp         Search_Loader_Begin
 
 ; 开始从根目录检索启动程序loader
-    sector      dw                  StartSectorOfRootDir    ; 当前根目录搜索扇区
-    sectorLoop  dw                  SectorsOfRootDir        ; 当前剩余扇区，用于循环计数
+    SECTOR      dw                  StartSectorOfRootDir    ; 当前根目录搜索扇区
+    SECTORLOOP  dw                  SectorsOfRootDir        ; 当前剩余扇区，用于循环计数
 
 Search_Loader_Begin:
-    cmp         word [sectorLoop],  0
+    cmp         word [SECTORLOOP],  0
     jz          Search_NotFound                             ; 找遍所有根目录扇区，没有找到
-    dec         word [sectorLoop]                           ; --sectorLoop
+    dec         word [SECTORLOOP]                           ; --SECTORLOOP
     
     mov         ax,                 TempSeg
     mov         es,                 ax
     mov         bx,                 TempBase
-    mov         ax,                 [sector]
+    mov         ax,                 [SECTOR]
     mov         cl,                 1
-    call        FS_ReadSector                               ; 从[sector]读取1个扇区，保存到TempSeg:TempBase
-    mov         si,                 LoaderName
+    call        FS_ReadSector                               ; 从[SECTOR]读取1个扇区，保存到TempSeg:TempBase
+    mov         si,                 LOADER_NAME
     mov         di,                 TempBase                ; 临时存放区域
     cld                                                     ; 清除DF，LODSB时递增
     mov         dx,                 10h
@@ -82,11 +82,11 @@ Search_Compare_GoOn:
 Search_Compare_NotMatch:
     and         di,                 0ffe0h                  ; 低位置0
     add         di,                 20h                     ; 指向下一个根目录
-    mov         si,                 LoaderName
+    mov         si,                 LOADER_NAME
     jmp         Search_Loader_File
 
 Search_Next_Sector_RootDir:
-    inc         word [sector]
+    inc         word [SECTOR]
     jmp         Search_Loader_Begin
 
 Search_NotFound:
@@ -94,7 +94,7 @@ Search_NotFound:
     xor         ax,                 ax
     mov         es,                 ax
     pop         ax
-    mov         si,                 NotFound
+    mov         si,                 NOT_FOUND
     mov         cx,                 NotFoundLen
     call        VS_Print
     jmp         $                                           ; 死循环

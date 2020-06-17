@@ -3,6 +3,8 @@
 #include <string.h>
 #include <assert.h>
 
+static const FS_FAT12_RootDir s_emptyRootDir = { 0 };
+
 enum
 {
     Floopy_Sector_Size = 512,
@@ -44,21 +46,24 @@ static const char* getDOSFilename(const char* filename, char resultBuffer[11])
     return resultBuffer;
 }
 
-static int availableRootDirOffset(FS_FAT12_CreateHandle* handle)
+static FS_FAT12_RootDir* availableRootDir(FS_FAT12_CreateHandle* handle)
 {
-    static const FS_FAT12_RootDir emptyRootDir = { 0 };
     FS_FAT12* fat12Image = (FS_FAT12*)handle->buffer;
     const int fatTablesSectors = fat12Image->BPB_FATSz16 * fat12Image->BPB_NumFATs;
     const int fatRootDirSectorStart = 1 + fatTablesSectors;
     const int rootEntSectors = (fat12Image->BPB_RootEntCnt * sizeof(FS_FAT12_RootDir) + fat12Image->BPB_BytesPerSec - 1) / fat12Image->BPB_BytesPerSec;
+
     int offset = fat12Image->BPB_BytesPerSec * fatRootDirSectorStart;
-    while (memcmp(handle->buffer + offset, &emptyRootDir, sizeof(emptyRootDir)) != 0)
+    const FS_FAT12_RootDir* const rootBase = (FS_FAT12_RootDir*)(handle->buffer + offset);
+    FS_FAT12_RootDir* rootPtr = (FS_FAT12_RootDir *) rootBase;
+
+    while (memcmp(rootPtr, &s_emptyRootDir, sizeof(s_emptyRootDir)) != 0)
     {
-        offset += sizeof(emptyRootDir);
-        if (offset >= (fat12Image->BPB_BytesPerSec * rootEntSectors)) /* 根目录区已满 */
-            return -1;
+        ++rootPtr;
+        if (((DB*)rootPtr - (DB*)rootBase) >= (fat12Image->BPB_BytesPerSec * rootEntSectors)) /* 根目录区已满 */
+            return NULL;
     }
-    return offset;
+    return rootPtr;
 }
 
 static void formatFATTables(FS_FAT12_CreateHandle* handle)
@@ -77,11 +82,6 @@ static int byteOffsetFromFATIndex(int index)
 {
     /* 一个FAT表项由1.5个字节表示 */
     return (index + index + index) >> 1;
-}
-
-static int fatIndexFromByteOffset(int offset)
-{
-    return offset * 2 / 3;
 }
 
 static DW clusterFromFATIndex(DB* imgBuffer, int fatTableOffset, int fatIndex)
@@ -124,34 +124,32 @@ static void setClusterFromFATIndex(FS_FAT12_CreateHandle* handle, int fatIndex, 
     }
 }
 
-static void availableCluster(FS_FAT12_CreateHandle* handle, int* nextCluster, int* fatIndex)
+static void availableCluster(FS_FAT12_CreateHandle* handle, int* nextCluster)
 {
-    /* 遍历FAT表，获取一个可用簇，以及其在FAT表中的索引 */
+    /* 遍历根目录，获取下一个簇，并获取其在FAT表中的索引 */
     FS_FAT12* fat12Image = (FS_FAT12*)handle->buffer;
-    int offset = 1 * fat12Image->BPB_BytesPerSec;
-    const int fatSectors = fat12Image->BPB_FATSz16;
-    const int startIndex = 2;
-    const int maxIndex = fatIndexFromByteOffset(fatSectors * fat12Image->BPB_BytesPerSec);
-    int index = startIndex;
+    const int fatTablesSectors = fat12Image->BPB_FATSz16 * fat12Image->BPB_NumFATs;
+    const int fatRootDirSectorStart = 1 + fatTablesSectors;
+    const int offset = fatRootDirSectorStart * fat12Image->BPB_BytesPerSec;
+    FS_FAT12_RootDir* rootPtr = (FS_FAT12_RootDir*) (handle->buffer + offset);
 
-    /* 寻找最大的已经使用的簇 */
-    int maxCluster = 0x01;
-    while (index < maxIndex)
+    const int clusterBegin = 2; /* 数据区簇0-1被FAT1和FAT2占用 */
+    int cluster = clusterBegin;
+    int clusNum = 0;
+    while (memcmp(rootPtr, &s_emptyRootDir, sizeof(s_emptyRootDir)) != 0)
     {
-        DW cluster = clusterFromFATIndex(handle->buffer, offset, index);
-        if (cluster < 0xFF7)
-        {
-            if (maxCluster < cluster)
-                maxCluster = cluster;
-        }
-        if (cluster == 0x00)
-            break;
-        ++index;
+        clusNum = rootPtr->DIR_FileSize / 512;
+        int clusRemains = rootPtr->DIR_FileSize % 512;
+        if (clusRemains > 0)
+            ++clusNum;
+
+        cluster += clusNum;
+
+        ++rootPtr;
     }
-    if (nextCluster)
-        *nextCluster = maxCluster + 1;
-    if (fatIndex)
-        *fatIndex = index;
+
+    if (*nextCluster)
+        *nextCluster = cluster;
 }
 
 FS_FAT12_CreateHandle FS_FAT12_Create(const char* filename)
@@ -267,21 +265,22 @@ FS_FAT12_CreateError FS_FAT12_CreateRootFileFromBinary(FS_FAT12_CreateHandle* ha
     if (clusNum > 0)
     {
         /* 获取一个可用的簇号作为起始值 */
-        int cluster, fatIndex;
-        availableCluster(handle, &cluster, &fatIndex);
+        int cluster;
+        availableCluster(handle, &cluster);
+        int thisCluster = cluster;
         rootDirFile.DIR_FstClus = cluster;
 
         /* 写根目录 */
-        int rootDirOffset = availableRootDirOffset(handle);
-        if (rootDirOffset == -1)
+        FS_FAT12_RootDir* availableRootDirPtr = availableRootDir(handle);
+        if (!availableRootDirPtr)
             return FS_FAT12_Error_Memory;
-        memcpy(handle->buffer + rootDirOffset, &rootDirFile, sizeof(rootDirFile));
+        memcpy(availableRootDirPtr, &rootDirFile, sizeof(rootDirFile));
 
         while (clusNum--)
         {
             /* 获取写入的位置。注意，FAT1和FAT2占用了头2个簇 */
             const int offsetData = fat12Image->BPB_BytesPerSec * dataSectorsStart;
-            DB* dest = handle->buffer + offsetData + ((cluster - 2) * fat12Image->BPB_NumFATs);
+            DB* dest = handle->buffer + offsetData + ((cluster - 2) * fat12Image->BPB_BytesPerSec * fat12Image->BPB_SecPerClus);
             DW len = clusRemains ? clusRemains : fat12Image->BPB_BytesPerSec * fat12Image->BPB_SecPerClus;
             memcpy(dest, data, len);
 
@@ -289,9 +288,9 @@ FS_FAT12_CreateError FS_FAT12_CreateRootFileFromBinary(FS_FAT12_CreateHandle* ha
             if (!clusNum)
                 cluster = 0xFFF;
             else
-                ++cluster, ++fatIndex;
+                ++cluster;
 
-            setClusterFromFATIndex(handle, fatIndex, cluster);
+            setClusterFromFATIndex(handle, thisCluster, cluster);
         }
     }
     return err;

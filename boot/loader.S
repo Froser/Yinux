@@ -1,6 +1,29 @@
 ; 内核加载器
 org 10000h
+
+; 重新设置栈基址
+xor                 ax,             ax
+mov                 ss,             ax
+mov                 sp,             7c00h
+mov                 ax,             1000h
+mov                 ds,             ax                      ; 设置段基址
+
 jmp                 Main
+
+%include "floppy_service.inc"
+%include "video_service.inc"
+
+TempSeg             equ             0x0000
+TempBase            equ             0x8000
+
+NOT_FOUND           db              "Kernel not found"
+NotFoundLen         equ             $ - NOT_FOUND
+KERNEL_NAME         db              "kernel  bin"
+KernelNameLen       equ             $ - KERNEL_NAME
+
+; 开始从根目录检索启动程序kernel
+SECTOR              dw              StartSectorOfRootDir    ; 当前根目录搜索扇区
+SECTORLOOP          dw              SectorsOfRootDir        ; 当前剩余扇区，用于循环计数
 
 [SECTION gdt]
 ; 临时GDT
@@ -19,28 +42,86 @@ GDT_PTR             dw              GdtLen - 1
 [SECTION .s16]
 [BITS 16]
 Main:
-    ; 打开A20控制门
-    ; A20控制门表示第20条地址线(从0开始)
-    ; 使用Fast A20 (92h) 来打开A20
-    push            ax
-    in              al,             92h                 ; 从端口读取
-    or              al,             2                   ; 修改bit1，设置为打开
-    out             92h,            al                  ; 写入端口，打开A20
+; 打开A20控制门
+; A20控制门表示第20条地址线(从0开始)
+; 使用Fast A20 (92h) 来打开A20
+    push        ax
+    in          al,                 92h                     ; 从端口读取
+    or          al,                 2                       ; 修改bit1，设置为打开
+    out         92h,                al                      ; 写入端口，打开A20
 
-    cli                                                 ; 禁止中断
+    cli                                                     ; 禁止中断
 
-    db              0x66
-    lgdt            [GDT_PTR]                           ; 设置GDT表
-    mov             eax,            cr0
-    or              eax,            1
-    mov             cr0,            eax                 ; cr0第一位设置为1，表示进入保护模式
+    db          0x66
+    lgdt        [GDT_PTR]                                   ; 设置GDT表
+    mov         eax,                cr0
+    or          eax,                1
+    mov         cr0,                eax                     ; cr0第一位设置为1，表示进入保护模式
 
-    mov             ax,             SelectorData32
-    mov             fs,             ax                  ; 修改FS为数据段选择子
-    mov             eax,            cr0
-    and             al,             0feh                ; 退出保护模式
-    mov             cr0,            eax
+    mov         ax,                 SelectorData32
+    mov         fs,                 ax                      ; 修改FS为数据段选择子
+    mov         eax,                cr0
+    and         al,                 0feh                    ; 退出保护模式
+    mov         cr0,                eax
 
-    sti                                                 ; 恢复中断
+    sti                                                     ; 恢复中断
 
-    jmp             $
+; 准备寻找kernel文件
+Search_Kernel_Begin:
+    cmp         word [SECTORLOOP],  0
+    jz          Search_NotFound                             ; 找遍所有根目录扇区，没有找到
+    dec         word [SECTORLOOP]                           ; --SECTORLOOP
+    
+    mov         ax,                 TempSeg
+    mov         es,                 ax
+    mov         bx,                 TempBase
+    mov         ax,                 [SECTOR]
+    mov         cl,                 1
+    call        FS_ReadSector                               ; 从[SECTOR]读取1个扇区，保存到TempSeg:TempBase
+    mov         si,                 KERNEL_NAME
+    mov         di,                 TempBase                ; 临时存放区域
+    cld                                                     ; 清除DF，LODSB时递增
+    mov         dx,                 10h
+
+Search_Kernel_File:
+    cmp         dx,                 0
+    jz          Search_Next_Sector_RootDir
+    dec         dx
+    mov         cx,                 11                      ; FAT12根目录部分文件名为11字节。cx作为计数器
+
+Search_Compare_FileName:
+    cmp         cx,                 0
+    jz          Search_FileName_Found
+    dec         cx
+    lodsb                                                   ; ds:si中获取字符到al
+    cmp         al,                 byte [es:di]
+    jz          Search_Compare_GoOn                         ; 单个字符匹配成功
+    jmp         Search_Compare_NotMatch                     ; 单个字符匹配失败
+
+Search_Compare_GoOn:
+    inc         di
+    jmp         Search_Compare_FileName
+
+Search_Compare_NotMatch:
+    and         di,                 0ffe0h                  ; 低位置0
+    add         di,                 20h                     ; 指向下一个根目录
+    mov         si,                 KERNEL_NAME
+    jmp         Search_Kernel_File
+
+Search_Next_Sector_RootDir:
+    inc         word [SECTOR]
+    jmp         Search_Kernel_Begin
+
+Search_NotFound:
+    push        ax
+    mov         ax,                 ds
+    mov         es,                 ax                      ; es和ds同一段
+    pop         ax
+    mov         si,                 NOT_FOUND
+    mov         cx,                 NotFoundLen
+    call        VS_Print
+    jmp         $                                           ; 死循环
+
+Search_FileName_Found:
+    jmp         $
+    pop         ax
