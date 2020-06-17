@@ -5,10 +5,16 @@
 ; 物理地址的指令寻址方式为CS:IP
 
 ; 基址
-StackSeg equ 0x0001
+StackSeg equ 0x0000
 StackBase equ 0x7c00
-TempSeg equ 0x0001
+
+TempSeg equ 0x0000
 TempBase equ 0x8000
+
+; 1000:0000 为loader加载地址
+LoaderBase equ 0x1000
+LoaderOffset equ 0x0000
+
 org 0x7c00
 
 jmp Main                                                    ; 3字节跳转
@@ -22,8 +28,6 @@ NotFound        db      "Loader not found"
 NotFoundLen     equ     $ - NotFound
 LoaderName      db      "loader  bin"
 LoaderNameLen   equ     $ - LoaderName
-Found           db      "loader.bin found"
-FoundLen        equ     $ - Found
 
 Main:                                                       ; cs此时为0x0000，ip此时为0x7c00
     mov         ax,                 cs                      ; 初始化ds, es, ss, sp
@@ -47,10 +51,10 @@ Search_Loader_Begin:
     
     mov         ax,                 TempSeg
     mov         es,                 ax
-    mov         bx,                 TempBase                ; 0x10000 作为临时区域
+    mov         bx,                 TempBase
     mov         ax,                 [sector]
     mov         cl,                 1
-    call        FS_ReadSector                               ; 从[sector]读取1个扇区，保存到TempSeg:TempBase (0x10000)
+    call        FS_ReadSector                               ; 从[sector]读取1个扇区，保存到TempSeg:TempBase
     mov         si,                 LoaderName
     mov         di,                 TempBase                ; 临时存放区域
     cld                                                     ; 清除DF，LODSB时递增
@@ -66,7 +70,7 @@ Search_Compare_FileName:
     cmp         cx,                 0
     jz          Search_FileName_Found
     dec         cx
-    lodsb                                                   ; ds:ei中获取字符到al
+    lodsb                                                   ; ds:si中获取字符到al
     cmp         al,                 byte [es:di]
     jz          Search_Compare_GoOn                         ; 单个字符匹配成功
     jmp         Search_Compare_NotMatch                     ; 单个字符匹配失败
@@ -96,20 +100,38 @@ Search_NotFound:
     jmp         $                                           ; 死循环
 
 Search_FileName_Found:
-    xor         ax,                 ax
+    mov         ax,                 TempSeg
     mov         es,                 ax
-    mov         si,                 Found
-    mov         cx,                 FoundLen
-    call        VS_Print
+    mov         ax,                 SectorsOfRootDir        ; 14
+    mov         di,                 TempBase                ; [es:di] 为 TempSeg:TempBase，为找到loader的根目录的扇区
+    add         di,                 01ah                    ; 获取簇号DIR_FstClus
+    mov         cx,                 word [es:di]            ; loader对应的簇
+    push        cx
+    add         cx,                 ax                      ; +14，
+    add         cx,                 17                      ; +17，由于数据区头2个簇被占用了，所以这里只加17 (StartSectorOfRootDir - 2)，此时cx应当为数据所在的簇了
+    
+    mov         ax,                 LoaderBase
+    mov         es,                 ax
+    mov         bx,                 LoaderOffset
 
-;    mov         ax,                 SectorsOfRootDir
-;    and         di,                 0ffe0h                  ; 清除低5位
-;    add         di,                 01ah                    ; 获取簇号DIR_FstClus
-;    mov         cx,                 word [es:di]
-;    push        cx
-;    add         cx,                 ax
-;    add         cx,                 SectorBalance
+    mov         ax,                 cx
 
+Loader_Loading:
+    mov         cl,                 1
+    call        FS_ReadSector                               ; 读取一个扇区的数据，放到es:bx
+    pop         ax                                          ; loader对应的簇
+    call        FS_GetFATEntry                              ; 下一个簇
+    cmp         ax,                 0fffh                   ; 没有下一个簇了，读取已经完成
+    jz          Loader_Loaded
+    push        ax
+    mov         dx,                 SectorsOfRootDir
+    add         ax,                 dx
+    add         ax,                 17                      ; 读取下一个簇的数据
+    add         bx,                 [BPB_BytesPerSec]       ; 偏移BPB_BytesPerSec个字节
+    jmp         Loader_Loading
+
+Loader_Loaded:
+    jmp         LoaderBase:LoaderOffset                     ; cs->LoaderBase
 
 ; 填充扇区
 times   510 - ($ - $$) db 0

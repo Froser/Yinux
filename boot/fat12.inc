@@ -23,4 +23,3 @@ BS_FileSysType          db      'FAT12   '      ; 文件系统类型
 SectorsOfRootDir        equ     14              ; 根目录所占扇区
 StartSectorOfRootDir    equ     19              ; 根目录起始扇区
 SectorFAT1              equ     1               ; FAT1起始扇区
-SectorBalance           equ     17              ; 计算FAT扇区的偏移值

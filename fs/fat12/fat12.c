@@ -133,6 +133,8 @@ static void availableCluster(FS_FAT12_CreateHandle* handle, int* nextCluster, in
     const int startIndex = 2;
     const int maxIndex = fatIndexFromByteOffset(fatSectors * fat12Image->BPB_BytesPerSec);
     int index = startIndex;
+
+    /* 寻找最大的已经使用的簇 */
     int maxCluster = 0x01;
     while (index < maxIndex)
     {
@@ -264,34 +266,32 @@ FS_FAT12_CreateError FS_FAT12_CreateRootFileFromBinary(FS_FAT12_CreateHandle* ha
 
     if (clusNum > 0)
     {
+        /* 获取一个可用的簇号作为起始值 */
+        int cluster, fatIndex;
+        availableCluster(handle, &cluster, &fatIndex);
+        rootDirFile.DIR_FstClus = cluster;
+
         /* 写根目录 */
         int rootDirOffset = availableRootDirOffset(handle);
         if (rootDirOffset == -1)
             return FS_FAT12_Error_Memory;
         memcpy(handle->buffer + rootDirOffset, &rootDirFile, sizeof(rootDirFile));
 
-        /* 更新FAT，并写数据 */
-        int cluster, fatIndex;
-        availableCluster(handle, &cluster, &fatIndex);
-        rootDirFile.DIR_FstClus = cluster;
-
-        const int offsetData = fat12Image->BPB_BytesPerSec * dataSectorsStart;
-        int clusCnt = clusNum;
-        while (clusCnt--)
+        while (clusNum--)
         {
-            if (!clusCnt)
-                cluster = 0xFFF;
-
-            setClusterFromFATIndex(handle, fatIndex, cluster);
-
             /* 获取写入的位置。注意，FAT1和FAT2占用了头2个簇 */
-            DB* dest = handle->buffer + offsetData + (cluster - fat12Image->BPB_NumFATs);
+            const int offsetData = fat12Image->BPB_BytesPerSec * dataSectorsStart;
+            DB* dest = handle->buffer + offsetData + ((cluster - 2) * fat12Image->BPB_NumFATs);
             DW len = clusRemains ? clusRemains : fat12Image->BPB_BytesPerSec * fat12Image->BPB_SecPerClus;
             memcpy(dest, data, len);
 
-            /* 迭代，寻找下一个可用簇及FAT索引 */
-            availableCluster(handle, &cluster, &fatIndex);
-            assert(cluster <= 0xFFF);
+            /* 将cluster设置为下一个簇号，写入FAT表 */
+            if (!clusNum)
+                cluster = 0xFFF;
+            else
+                ++cluster, ++fatIndex;
+
+            setClusterFromFATIndex(handle, fatIndex, cluster);
         }
     }
     return err;

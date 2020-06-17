@@ -54,13 +54,13 @@ _FS_ReadSector_Continue:
 ; ah=FAT表项号
 ; 返回：
 ; ah=FAT下一个表项号
-VS_TempSeg equ 0x0001
-VS_TempBase equ 0x8000
+VS_TempSeg equ 0x0000
+VS_TempBase equ 0x9000
 
 ; 临时变量
 Odd         db          0
 
-VS_GetFATEntry:
+FS_GetFATEntry:
     push    bp
     mov     bp,         sp
     push    es
@@ -75,9 +75,9 @@ VS_GetFATEntry:
     mov     bx,         2
     div     bx
     cmp     dx,         0
-    jz      _VS_GetFatEntry_Even
+    jz      _FS_GetFatEntry_Even
     mov     byte [Odd], 1
-_VS_GetFatEntry_Even:
+_FS_GetFatEntry_Even:
     xor     dx,         dx
     mov     bx,         [BPB_BytesPerSec]
     div     bx
@@ -91,10 +91,10 @@ _VS_GetFatEntry_Even:
     add     bx,         dx
     mov     ax,         [es:bx]
     cmp     byte [Odd], 1
-    jnz     _VS_GetFatEntry_Even2
+    jnz     _FS_GetFatEntry_Even2
     shr     ax,         4
 
-_VS_GetFatEntry_Even2:
+_FS_GetFatEntry_Even2:
     and     ax,         0fffh           ; 获取12bits表项
     pop     bx
     pop     es
