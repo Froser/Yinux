@@ -21,6 +21,9 @@ NotFoundLen         equ             $ - NOT_FOUND
 KERNEL_NAME         db              "kernel  bin"
 KernelNameLen       equ             $ - KERNEL_NAME
 
+KernelTmpBase       equ             0x0000
+KernelTmpOffset     equ             0x7e00
+
 ; 开始从根目录检索启动程序kernel
 SECTOR              dw              StartSectorOfRootDir    ; 当前根目录搜索扇区
 SECTORLOOP          dw              SectorsOfRootDir        ; 当前剩余扇区，用于循环计数
@@ -45,7 +48,6 @@ Main:
 ; 打开A20控制门
 ; A20控制门表示第20条地址线(从0开始)
 ; 使用Fast A20 (92h) 来打开A20
-    push        ax
     in          al,                 92h                     ; 从端口读取
     or          al,                 2                       ; 修改bit1，设置为打开
     out         92h,                al                      ; 写入端口，打开A20
@@ -120,8 +122,36 @@ Search_NotFound:
     mov         si,                 NOT_FOUND
     mov         cx,                 NotFoundLen
     call        VS_Print
+    pop         ax
     jmp         $                                           ; 死循环
 
 Search_FileName_Found:
+    mov         ax,                 SectorsOfRootDir
+    and         di,                 0ffe0h
+    add         di,                 01Ah;
+    mov         cx,                 word [es:di]
+    push        cx
+    add         cx,                 ax
+    add         cx,                 17
+    mov         eax,                KernelTmpBase
+    mov         es,                 eax
+    mov         bx,                 KernelTmpOffset
+    mov         ax,                 cx
+
+Kernel_Loading:
+    mov         cl,                 1
+    call        FS_ReadSector
+    pop         ax                                          ; 对应上面的push cx
+    call        FS_GetFATEntry                              ; 下一个簇
+    cmp         ax,                 0fffh                   ; 没有下一个簇了，读取已经完成
+    jz          Kernel_Loaded
+    push        ax
+    mov         dx,                 SectorsOfRootDir
+    add         ax,                 dx
+    add         ax,                 17                      ; 读取下一个簇的数据
+    add         bx,                 [BPB_BytesPerSec]       ; 偏移BPB_BytesPerSec个字节
+    jmp         Kernel_Loading
+
+Kernel_Loaded:
+
     jmp         $
-    pop         ax

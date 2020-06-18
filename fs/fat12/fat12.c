@@ -113,7 +113,7 @@ static void setClusterFromFATIndex(FS_FAT12_CreateHandle* handle, int fatIndex, 
         DW dwCluster = (DW)cluster;
         if (fatIndex & 1)
         {
-            ptr[0] = (dwCluster << 8 >> 8) | (ptr[0] & 0x0F);
+            ptr[0] = ((DW)(dwCluster & 0xF) << 4) | (ptr[0] & 0x0F);
             ptr[1] = dwCluster >> 4;
         }
         else
@@ -281,8 +281,9 @@ FS_FAT12_CreateError FS_FAT12_CreateRootFileFromBinary(FS_FAT12_CreateHandle* ha
             /* 获取写入的位置。注意，FAT1和FAT2占用了头2个簇 */
             const int offsetData = fat12Image->BPB_BytesPerSec * dataSectorsStart;
             DB* dest = handle->buffer + offsetData + ((cluster - 2) * fat12Image->BPB_BytesPerSec * fat12Image->BPB_SecPerClus);
-            DW len = clusRemains ? clusRemains : fat12Image->BPB_BytesPerSec * fat12Image->BPB_SecPerClus;
+            DW len = clusNum ? fat12Image->BPB_BytesPerSec * fat12Image->BPB_SecPerClus : clusRemains;
             memcpy(dest, data, len);
+            data += len;
 
             /* 将cluster设置为下一个簇号，写入FAT表 */
             if (!clusNum)
@@ -290,7 +291,7 @@ FS_FAT12_CreateError FS_FAT12_CreateRootFileFromBinary(FS_FAT12_CreateHandle* ha
             else
                 ++cluster;
 
-            setClusterFromFATIndex(handle, thisCluster, cluster);
+            setClusterFromFATIndex(handle, thisCluster++, cluster);
         }
     }
     return err;

@@ -97,6 +97,7 @@ Search_NotFound:
     mov         si,                 NOT_FOUND
     mov         cx,                 NotFoundLen
     call        VS_Print
+    pop         ax
     jmp         $                                           ; 死循环
 
 Search_FileName_Found:
