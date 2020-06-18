@@ -20,8 +20,6 @@ NOT_FOUND           db              "Kernel not found"
 NotFoundLen         equ             $ - NOT_FOUND
 KERNEL_NAME         db              "kernel  bin"
 KernelNameLen       equ             $ - KERNEL_NAME
-LONG_MODE_UNSUPPORT db              "Long mode not support"
-LongModeUnsupportLn equ             $ - LONG_MODE_UNSUPPORT
 
 KernelTmpBase       equ             0x0000
 KernelTmpOffset     equ             0x7e00
@@ -46,6 +44,19 @@ SelectorData32      equ             LABEL_DESC_DATA32 - LABEL_GDT
 ; GDT_PTR 表示48位GDT伪描述符 基地址[32]:长度[16]
 GDT_PTR             dw              GdtLen - 1
                     dd              LABEL_GDT
+
+
+[SECTION gdt64]
+LABEL_GDT64:        dq              0x0000000000000000
+LABEL_DESC_CODE64:  dq              0x0020980000000000
+LABEL_DESC_DATA64:  dq              0x0000980000000000
+
+GdtLen64            equ             $ - LABEL_GDT64
+SelectorCode64      equ             LABEL_DESC_CODE64 - LABEL_GDT64
+SelectorData64      equ             LABEL_DESC_DATA64 - LABEL_GDT64
+
+GDT_PTR64           dw              GdtLen64 - 1
+                    dd              LABEL_GDT64
 
 [SECTION idt]
 ; 临时IDT
@@ -220,35 +231,83 @@ Kernel_Loaded:
 
     jmp         dword SelectorCode32:Temp_Protect           ; 跳转到保护模式的方法中
 
+[SECTION .s32]
+[BITS 32]
 Temp_Protect:
-;    mov         ax,                 0x10
-;    mov         ds,                 ax
-;    mov         es,                 ax
-;    mov         fs,                 ax
-;    mov         ss,                 ax
-;    mov         esp,                7e00h
-
-;    call        SupportLongMode
-;    test        eax,                eax
-;    jmp          NotSupportLongModeExit
-
-;    sti
+    mov         ax,                 10h
+    mov         ds,                 ax
+    mov         es,                 ax
+    mov         fs,                 ax
+    mov         ss,                 ax
+    mov         esp,                7e00h
+    call        SupportLongMode
+    test        eax,                eax
+    jz          NotSupportLongModeExit
+    jmp         Protect_GoOn
 
 SupportLongMode:
-;    mov         ax,                 0
-;    ret
+    mov         eax,                80000000h               ; 查询支持的最大扩展功能号
+    cpuid
+    cmp         eax,                80000001h               ; 是否超过0x80000001
+    setnb       al
+    jb          SupportLongModeFinish                       ; 返回结果
+    mov         eax,                80000001h
+    cpuid
+    bt          edx,                29                      ; EFLAGS第29位表示是否支持长模式
+    setc        al
+
+SupportLongModeFinish:
+    movzx       eax,                al
+    ret
 
 NotSupportLongModeExit:
-    push        ax
+    jmp         $
+
+Protect_GoOn:
+    ; 页表
+    mov         dword [0x90000],    0x91007                 ; 0x90000为页表地址
+    mov         dword [0x90800],    0x91007
+
+    mov         dword [0x91000],    0x92007
+
+    mov         dword [0x92000],    0x000083
+    mov         dword [0x92008],    0x200083
+    mov         dword [0x92010],    0x400083
+    mov         dword [0x92018],    0x600083
+    mov         dword [0x92020],    0x800083
+    mov         dword [0x92028],    0xa00083
+
+    db          0x66
+    lgdt        [GDT_PTR64]                                 ; 重新加载64位GDT
+    mov         ax,                 10h
+    mov         ds,                 ax
+    mov         es,                 ax
+    mov         fs,                 ax
+    mov         gs,                 ax
+    mov         ss,                 ax
+    mov         esp,                7e00h
+
+    ; 开启物理地址扩展 PAE, CR4中的第5位
+    mov         eax,                cr4
+    bts         eax,                5
+    mov         cr4,                eax
+
+    ; 设置页表地址 CR3
+    mov         eax,                90000h
+    mov         cr3,                eax
+
+    ; 激活IA-32e
+    ; 应该用CPUID.01h:EDX[5]来检测
+    mov         ecx,                0C0000080h
+    rdmsr
+    bts         eax,                8
+    wrmsr
+
+    ; 开启分页和保护模式(PG, PE)
     mov         eax,                cr0
-    and         al,                 0feh                    ; 退出保护模式
+    bts         eax,                0
+    bts         eax,                31
     mov         cr0,                eax
 
-    mov         ax,                 ds
-    mov         es,                 ax                      ; es和ds同一段
-    pop         ax
-    mov         si,                 LONG_MODE_UNSUPPORT
-    mov         cx,                 LongModeUnsupportLn
-    call        VS_Print
-    pop         ax
-    jmp         $
+    ; 长跳转到内核文件
+    jmp         SelectorCode64:KernelOffset
