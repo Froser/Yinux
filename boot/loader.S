@@ -20,13 +20,18 @@ NOT_FOUND           db              "Kernel not found"
 NotFoundLen         equ             $ - NOT_FOUND
 KERNEL_NAME         db              "kernel  bin"
 KernelNameLen       equ             $ - KERNEL_NAME
+LONG_MODE_UNSUPPORT db              "Long mode not support"
+LongModeUnsupportLn equ             $ - LONG_MODE_UNSUPPORT
 
 KernelTmpBase       equ             0x0000
 KernelTmpOffset     equ             0x7e00
+KernelBase          equ             0x00
+KernelOffset        equ             0x100000
 
 ; 开始从根目录检索启动程序kernel
 SECTOR              dw              StartSectorOfRootDir    ; 当前根目录搜索扇区
 SECTORLOOP          dw              SectorsOfRootDir        ; 当前剩余扇区，用于循环计数
+KERNEL_OFS          dd              KernelOffset            ; 用于记录真正的内核偏移
 
 [SECTION gdt]
 ; 临时GDT
@@ -42,6 +47,15 @@ SelectorData32      equ             LABEL_DESC_DATA32 - LABEL_GDT
 GDT_PTR             dw              GdtLen - 1
                     dd              LABEL_GDT
 
+[SECTION idt]
+; 临时IDT
+IDT:
+times 0x50          dq              0
+IDT_END:
+IDT_PTR:
+                    dw              IDT_END - IDT - 1
+                    dd              IDT
+
 [SECTION .s16]
 [BITS 16]
 Main:
@@ -55,7 +69,7 @@ Main:
     cli                                                     ; 禁止中断
 
     db          0x66
-    lgdt        [GDT_PTR]                                   ; 设置GDT表
+    lgdt        [GDT_PTR]                                   ; 加载GDT表
     mov         eax,                cr0
     or          eax,                1
     mov         cr0,                eax                     ; cr0第一位设置为1，表示进入保护模式
@@ -142,7 +156,43 @@ Kernel_Loading:
     mov         cl,                 1
     call        FS_ReadSector
     pop         ax                                          ; 对应上面的push cx
-    call        FS_GetFATEntry                              ; 下一个簇
+
+    ; 准备将Kernel移到1MB以上的位置
+    push        cx
+    push        eax
+    push        fs
+    push        edi
+    push        ds
+    push        esi
+
+    mov         cx,                 [BPB_BytesPerSec]       ; 一个扇区大小
+    mov         ax,                 KernelBase
+    mov         fs,                 ax                      ; TODO ONLY Bochs
+    mov         edi,                dword [KERNEL_OFS]
+
+    mov         ax,                 KernelTmpBase
+    mov         ds,                 ax
+    mov         esi,                KernelTmpOffset
+
+Kernel_Mov:
+    mov         al,                 byte [ds:esi]           ; 逐个字节从KernelTmpBase:KernelTmpOffset拷贝
+    mov         byte [fs:edi],      al                      ; 拷贝到fs:edi
+    inc         esi
+    inc         edi
+    loop        Kernel_Mov
+    mov         eax,                1000h
+    mov         ds,                 eax
+    mov         dword [KERNEL_OFS], edi
+
+    pop         esi
+    pop         ds
+    pop         edi
+    pop         fs
+    pop         eax
+    pop         cx
+
+    ; 拷贝完成，看看是否有下一个簇
+    call        FS_GetFATEntry
     cmp         ax,                 0fffh                   ; 没有下一个簇了，读取已经完成
     jz          Kernel_Loaded
     push        ax
@@ -153,5 +203,52 @@ Kernel_Loading:
     jmp         Kernel_Loading
 
 Kernel_Loaded:
+    ; 至此，内核代码已经移动到了KernelBase:KernelOffset
+    ; 之前所有的物理内存均可以废弃
+    ; 准备进入保护模式
+    cli                                                     ; 禁止中断
 
+    db          0x66
+    lgdt        [GDT_PTR]                                   ; 加载GDT表
+
+    db          0x66
+    lidt        [IDT_PTR]                                   ; 加载IDT表
+    
+    mov         eax,                cr0
+    or          eax,                1
+    mov         cr0,                eax                     ; cr0第一位设置为1，表示进入保护模式
+
+    jmp         dword SelectorCode32:Temp_Protect           ; 跳转到保护模式的方法中
+
+Temp_Protect:
+;    mov         ax,                 0x10
+;    mov         ds,                 ax
+;    mov         es,                 ax
+;    mov         fs,                 ax
+;    mov         ss,                 ax
+;    mov         esp,                7e00h
+
+;    call        SupportLongMode
+;    test        eax,                eax
+;    jmp          NotSupportLongModeExit
+
+;    sti
+
+SupportLongMode:
+;    mov         ax,                 0
+;    ret
+
+NotSupportLongModeExit:
+    push        ax
+    mov         eax,                cr0
+    and         al,                 0feh                    ; 退出保护模式
+    mov         cr0,                eax
+
+    mov         ax,                 ds
+    mov         es,                 ax                      ; es和ds同一段
+    pop         ax
+    mov         si,                 LONG_MODE_UNSUPPORT
+    mov         cx,                 LongModeUnsupportLn
+    call        VS_Print
+    pop         ax
     jmp         $
