@@ -1,15 +1,15 @@
 #!/bin/bash
 
 cd toolchain
-./make.sh
+bash ./make.sh
 cd ..
 
 cd boot
-./make.sh
+bash ./make.sh
 cd ..
 
 cd kernel
-./make.sh
+bash ./make.sh
 cd ..
 
 FILE=./bin/create_floppy_boot
