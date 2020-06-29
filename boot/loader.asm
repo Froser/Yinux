@@ -279,13 +279,6 @@ Protect_GoOn:
 
     db          0x66
     lgdt        [GDT_PTR64]                                 ; 重新加载64位GDT
-    mov         ax,                 10h
-    mov         ds,                 ax
-    mov         es,                 ax
-    mov         fs,                 ax
-    mov         gs,                 ax
-    mov         ss,                 ax
-    mov         esp,                7e00h
 
     ; 开启物理地址扩展 PAE, CR4中的第5位
     mov         eax,                cr4
