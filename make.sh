@@ -18,3 +18,5 @@ if test -f "$FILE"; then
 else
     echo "$FILE not exists. Please make create_floppy_boot first."
 fi
+
+cp ./toolchain/floppy_boot_linux.bxrc.in ./bin/floppy_boot_linux.bxrc
