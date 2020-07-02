@@ -86,7 +86,7 @@ _start:
     movq        $0x7e00,        %rsp
 
 // load cr3 (Page directory base)
-    movq        $0x101000,      %rax
+    movq        $0x101080,      %rax
     movq        %rax,           %cr3
     movq        fake_call(%rip),%rax
     pushq       $0x08

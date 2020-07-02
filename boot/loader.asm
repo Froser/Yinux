@@ -160,10 +160,10 @@ Search_FileName_Found:
     add         cx,                 17
     mov         eax,                KernelTmpBase
     mov         es,                 eax
-    mov         bx,                 KernelTmpOffset
     mov         ax,                 cx
 
 Kernel_Loading:
+    mov         bx,                 KernelTmpOffset
     mov         cl,                 1
     call        FS_ReadSector
     pop         ax                                          ; 对应上面的push cx
