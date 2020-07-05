@@ -1,7 +1,4 @@
 void Kernel_Main()
 {
-	while (1)
-	{
-
-	}
+	while (1);
 }

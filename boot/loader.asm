@@ -25,6 +25,7 @@ KernelTmpBase       equ             0x0000
 KernelTmpOffset     equ             0x7e00
 KernelBase          equ             0x00
 KernelOffset        equ             0x100000
+KernelStart         equ             0x105000
 
 ; 开始从根目录检索启动程序kernel
 SECTOR              dw              StartSectorOfRootDir    ; 当前根目录搜索扇区
@@ -303,4 +304,4 @@ Protect_GoOn:
     mov         cr0,                eax
 
     ; 长跳转到内核文件
-    jmp         SelectorCode64:KernelOffset
+    jmp         SelectorCode64:KernelStart

@@ -4,6 +4,14 @@ ENTRY(_start)
 SECTIONS
 {
 	. = 0xffff800000000000 + 0x100000;
+
+	.data :
+	{
+		_data = .;
+		*(.data)
+		_edata = .;
+	}
+
 	.text :
 	{
 		_text = .;
@@ -12,13 +20,6 @@ SECTIONS
 	}
 
 	. = ALIGN(8);
-
-	.data :
-	{
-		_data = .;
-		*(.data)
-		_edata = .;
-	}
 
 	.rodata :
 	{
