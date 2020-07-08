@@ -49,10 +49,10 @@ GDT_LIMIT:      .word   GDT_END - GDT_Table - 1
 GDT_BASE:       .quad   GDT_Table
 
 // IDT Table
-.align 8                                /* For basest performance */
+.align 8                                /* For best performance */
 .globl IDT_Table
 IDT_Table:
-    .fill   256,8,0
+    .fill   512,8,0
 IDT_END:
 
 IDT_POINTER:
@@ -68,7 +68,7 @@ TSS64_POINTER:
 TSS64_LIMIT:    .word   TSS64_END - TSS64_Table - 1
 TSS64_BASE:     .quad   TSS64_Table
 
-.org 0x4fe8
+.org 0x5fe8
 
 .section .text
 .globl _start
@@ -86,10 +86,53 @@ _start:
     mov         %ax,            %gs
     movq        $0x7e00,        %rsp
 
+// setup IDT
+    leaq        _int(%rip),     %rdx
+    movq        $(0x08 << 16),  %rax        /* Segment selector 8 */
+    movw        %dx,            %ax
+    movq        $(0x8e00 << 32), %rcx       /* IDT: P=1, DPL=0, S=0, Type=1110b (interrupt gate descriptor) */
+    addq        %rcx,           %rax
+    movl        %edx,           %ecx
+    shrl        $16,            %ecx
+    shlq        $48,            %rcx
+    addq        %rcx,           %rax        /* interrupt function offset */
+    shrq        $32,            %rdx
+    leaq        IDT_Table(%rip), %rdi
+    mov         $256,           %rcx        /* repeat times */
+repeat_idt:
+    movq        %rax,           (%rdi)
+    movq        %rdx,           8(%rdi)
+    addq        $0x10,          %rdi
+    dec         %rcx
+    jne         repeat_idt
+
+// setup TSS64
+    leaq        TSS64_Table(%rip), %rdx
+    xorq        %rax,           %rax        /* TSS */
+    xorq        %rcx,           %rcx
+    movq        $0x89,          %rax
+    shlq        $40,            %rax        /* TSS: P=1, B=0 */
+    movl        %edx,           %ecx
+    shrl        $24,            %ecx
+    shlq        $56,            %rcx
+    addq        %rcx,           %rax
+    xorq        %rcx,           %rcx
+    movl        %edx,           %ecx
+    andl        $0xffffff,       %ecx
+    shlq        $16,            %rcx
+    addq        %rcx,           %rax        /* TSS: Segment base */
+    addq        $103,           %rax
+    leaq        GDT_Table(%rip), %rdi
+    movq        %rax,           64(%rdi)    /* Write TSS to GDT (at 8) */
+    shrq        $32,            %rdx
+    movq        %rdx,           72(%rdi)
+    mov         $0x40,          %ax
+    ltr         %ax
+
 // load cr3 (Page directory base)
     movq        $0x101007,      %rax
     movq        %rax,           %cr3
-    movq        fake_call(%rip),%rax
+    movq        fake_call(%rip), %rax
     pushq       $0x08
     pushq       %rax
     lretq
@@ -98,6 +141,7 @@ fake_call:
     .quad       entry64
 
 entry64:
+// call kernel
     mov         $0x10,          %ax
     mov         %ax,            %gs
     movq        $0xffff800000007e00, %rsp   /* restore rsp */
@@ -108,3 +152,38 @@ entry64:
 
 go_kernel:
     .quad       Kernel_Main
+
+_int:
+    cld
+    pushq       %rax
+    pushq       %rbx
+    pushq       %rcx
+    pushq       %rdx
+    pushq       %rbp
+    pushq       %rdi
+    pushq       %rsi
+    pushq       %r8
+    pushq       %r9
+    pushq       %r10
+    pushq       %r11
+    pushq       %r12
+    pushq       %r13
+    pushq       %r14
+    pushq       %r15
+
+    popq        %r15
+    popq        %r14
+    popq        %r13
+    popq        %r12
+    popq        %r11
+    popq        %r10
+    popq        %r9
+    popq        %r8
+    popq        %rsi
+    popq        %rdi
+    popq        %rbp
+    popq        %rdx
+    popq        %rcx
+    popq        %rbx
+    popq        %rax
+    iretq

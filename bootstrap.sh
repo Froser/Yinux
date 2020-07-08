@@ -1,5 +1,4 @@
 #!/bin/bash
-
 apt-get install gcc
 apt-get install make
 apt-get install nasm
