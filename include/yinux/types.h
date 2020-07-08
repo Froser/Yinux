@@ -30,3 +30,9 @@ Yinux_Check_StaticSize(DD, 4);
 
 typedef unsigned long long DQ;
 Yinux_Check_StaticSize(DQ, 8);
+
+typedef unsigned short u16;
+Yinux_Check_StaticSize(u16, 2);
+
+typedef unsigned int u32;
+Yinux_Check_StaticSize(u32, 4);
