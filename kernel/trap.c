@@ -30,7 +30,9 @@ do                                                                          \
                            );                                               \
 } while(0)
 
-extern struct gate_struct64 IDT_Table[];
+void divide_error();
+
+extern gate_struct64 IDT_Table[];
 
 void set_intr_gate(unsigned int n, unsigned char ist, void* addr)
 {
@@ -42,7 +44,13 @@ void set_trap_gate(unsigned int n, unsigned char ist, void* addr)
     _set_gate(IDT_Table + n, 0x8E, ist, addr);  /* P,DPL=0, TYPE=E */
 }
 
+/* intr handlers */
+void do_divide_error(unsigned long rsp, unsigned long error_code)
+{
+    while (1);
+}
+
 void sys_vector_init()
 {
-    set_trap_gate(X86_TRAP_DE, 1, 0);
+    set_trap_gate(X86_TRAP_DE, 1, divide_error);
 }

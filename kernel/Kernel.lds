@@ -21,6 +21,20 @@ SECTIONS
 
 	. = ALIGN(8);
 
+	.got :
+	{
+		_got = .;
+		*(.got)
+		_egot = .;
+	}
+
+	.got.plt :
+	{
+		_got.plt = .;
+		*(.got.plt)
+		_egot.plt = .;
+	}
+
 	.rodata :
 	{
 		_rodata = .;

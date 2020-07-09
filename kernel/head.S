@@ -68,7 +68,7 @@ TSS64_POINTER:
 TSS64_LIMIT:    .word   TSS64_END - TSS64_Table - 1
 TSS64_BASE:     .quad   TSS64_Table
 
-.org 0x5fe8
+.org 0x6000
 
 .section .text
 .globl _start

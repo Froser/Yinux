@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "../../include/yinux/types.h"
 
-typedef YINUX_PACKED_STRUCT(FS_FAT12_t)
+typedef struct FS_FAT12_t
 {
     DB BS_jmpBoot[3];       // 3字节跳转指令
     DB BS_OEMName[8];       // OEM厂商
@@ -26,8 +26,7 @@ typedef YINUX_PACKED_STRUCT(FS_FAT12_t)
     DD BS_VolID;            // 卷序列号
     DB BS_VolLab[8];        // 卷标
     DB BS_FileSysType[11];  // 文件系统类型
-} FS_FAT12;
-YUNUX_PACKED_END();
+} __attribute__((packed)) FS_FAT12;
 
 Yinux_Check_StaticSize(FS_FAT12, 62);
 

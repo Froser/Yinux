@@ -17,5 +17,5 @@ head.o: head.S
 	as --64 -o ../bin/head.o ../bin/head.S
 
 entry.o: entry.S
-	gcc -E entry.S > ../bin/entry.S
-	as --64 -o ../bin/entry.o ../bin/entry.S
+	gcc -E entry.S > ../bin/entry.S -I ../include
+	as --64 -o ../bin/entry.o ../bin/entry.S -I ../include

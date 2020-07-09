@@ -1,3 +1,7 @@
+#define __ASSEMBLY__
+#include "../include/yinux/linkage.h"
+
+/* Stack layout */
 R15 = 0x00
 R14 = 0x08
 R13 = 0x10
@@ -24,23 +28,66 @@ OLDRSP = 0xb0
 OLDSS = 0xb8
 
 RESTORE_ALL:
-    popq  %r15
-    popq  %r14
-    popq  %r13
-    popq  %r12
-    popq  %r11
-    popq  %r10
-    popq  %r9
-    popq  %r8
-    popq  %rbx
-    popq  %rcx
-    popq  %rdx
-    popq  %rsi
-    popq  %rdi
-    popq  %rbp
-    popq  %rax
-    movq  %rax,   %ds   /* pop ds */
-    popq  %rax
-    movq  %rax,   %es   /* pop es */
-    addq  $0x10,  %rsp
+    popq    %r15
+    popq    %r14
+    popq    %r13
+    popq    %r12
+    popq    %r11
+    popq    %r10
+    popq    %r9
+    popq    %r8
+    popq    %rbx
+    popq    %rcx
+    popq    %rdx
+    popq    %rsi
+    popq    %rdi
+    popq    %rbp
+    popq    %rax
+    movq    %rax,   %ds   /* pop ds */
+    popq    %rax
+    movq    %rax,   %es   /* pop es */
+    addq    $0x10,  %rsp
     iretq
+
+ENTRY(divide_error)
+    pushq   $0
+    pushq   %rax
+    leaq    do_divide_error(%rip),     %rax
+    xchgq   %rax,   (%rsp)
+
+error_code:
+    pushq   %rax
+    movq    %es,    %rax
+    pushq   %rax          /* push es */
+    movq    %ds,    %rax
+    pushq   %rax          /* push ds */
+    pushq   %rbp
+    pushq   %rdi
+    pushq   %rsi
+    pushq   %rdx
+    pushq   %rcx
+    pushq   %rbx
+    pushq   %r8
+    pushq   %r9
+    pushq   %r10
+    pushq   %r11
+    pushq   %r12
+    pushq   %r13
+    pushq   %r14
+    pushq   %r15
+    cld
+
+    movq    ERRCODE(%rsp),  %rsi    /* 2st parameter */
+    movq    FUNC(%rsp),     %rdx
+    movq    $0x10,  %rdi
+    movq    %rdi,   %ds
+    movq    %rdi,   %es
+    movq    %rsp,   %rdi            /* 1st parameter */
+    callq   *%rdx
+
+    jmp     ret_from_exception
+
+ret_from_exception:
+
+ENTRY(ret_from_intr)
+    jmp     RESTORE_ALL
