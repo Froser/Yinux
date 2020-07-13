@@ -1,6 +1,9 @@
 #include <yinux/desc_defs.h>
 #include "trap.h"
 
+
+/* Set gate macro */
+/* rdi = IDT_Table + n, rdx = code_attr, rcx = ist */
 #define _set_gate(gate_selector_addr, attr, ist, code_attr)                 \
 do                                                                          \
 {                                                                           \
@@ -14,7 +17,7 @@ do                                                                          \
                            "movl   %%edx,  %%ecx    \n\t "                  \
                            "shrq   $16,    %%rcx    \n\t "                  \
                            "shlq   $48,    %%rcx    \n\t "                  \
-                           "andq   %%rcx,  %%rax    \n\t "                  \
+                           "addq   %%rcx,  %%rax    \n\t "                  \
                            "movq   %%rax,  %0       \n\t "                  \
                            "shrq   $32,    %%rdx    \n\t "                  \
                            "movq   %%rdx,  %1       \n\t "                  \
@@ -31,6 +34,7 @@ do                                                                          \
 } while(0)
 
 void divide_error();
+void page_fault();
 
 extern gate_struct64 IDT_Table[];
 
@@ -50,7 +54,17 @@ void do_divide_error(unsigned long rsp, unsigned long error_code)
     while (1);
 }
 
+void do_page_fault(unsigned long rsp, unsigned long error_code)
+{
+    unsigned long *p = 0;
+    unsigned long cr2 = 0;
+    __asm__ __volatile__ ("movq %%cr2, %0":"=r"(cr2)::"memory");
+    p = (unsigned long*)(rsp + 0x98);  /* RIP */
+    while (1);
+}
+
 void sys_vector_init()
 {
     set_trap_gate(X86_TRAP_DE, 1, divide_error);
+    set_trap_gate(X86_TRAP_PF, 1, page_fault);
 }

@@ -3,14 +3,17 @@ GCC_FLAGS := -mcmodel=large -fno-builtin -m64 -I ../include
 all: system
 	objcopy -I elf64-x86-64 -S -R ".eh_frame" -R ".comment" -O binary ../bin/system ../bin/kernel.bin
 
-system: head.o main.o trap.o entry.o
-	ld -b elf64-x86-64 -o ../bin/system ../bin/head.o ../bin/main.o ../bin/trap.o ../bin/entry.o -T Kernel.lds
+system: head.o main.o trap.o memory.o entry.o
+	ld -b elf64-x86-64 -o ../bin/system ../bin/head.o ../bin/main.o ../bin/trap.o ../bin/memory.o ../bin/entry.o -T Kernel.lds
 
 main.o: main.c
 	gcc $(GCC_FLAGS) -c main.c -o ../bin/main.o
 
 trap.o: trap.c
 	gcc $(GCC_FLAGS) -c trap.c -o ../bin/trap.o
+
+memory.o: memory.c
+	gcc $(GCC_FLAGS) -c memory.c -o ../bin/memory.o
 
 head.o: head.S
 	gcc -E head.S > ../bin/head.S

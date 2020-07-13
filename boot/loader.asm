@@ -179,7 +179,6 @@ Kernel_Loading:
 
     mov         cx,                 [BPB_BytesPerSec]       ; 一个扇区大小
     mov         ax,                 KernelBase
-    mov         fs,                 ax                      ; TODO ONLY Bochs
     mov         edi,                dword [KERNEL_OFS]
 
     mov         ax,                 KernelTmpBase
@@ -217,6 +216,14 @@ Kernel_Mov:
 Kernel_Loaded:
     ; 至此，内核代码已经移动到了KernelBase:KernelOffset
     ; 之前所有的物理内存均可以废弃
+
+    ; 内存信息
+    mov         eax,                KernelOffset
+    mov         ecx,                20
+    mov         edx,                0x534D4150              ; SMAP
+    int         15h
+    jc          Mem_Query_Failed
+    
     ; 准备进入保护模式
     cli                                                     ; 禁止中断
 
@@ -231,6 +238,9 @@ Kernel_Loaded:
     mov         cr0,                eax                     ; cr0第一位设置为1，表示进入保护模式
 
     jmp         dword SelectorCode32:Temp_Protect           ; 跳转到保护模式的方法中
+
+Mem_Query_Failed:
+    jmp         $
 
 [SECTION .s32]
 [BITS 32]

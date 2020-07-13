@@ -54,6 +54,13 @@ ENTRY(divide_error)
     pushq   %rax
     leaq    do_divide_error(%rip),     %rax
     xchgq   %rax,   (%rsp)
+    jmp     error_code
+
+ENTRY(page_fault)
+    pushq   %rax
+    leaq    do_page_fault(%rip),       %rax
+    xchgq   %rax,   (%rsp)
+    jmp     error_code
 
 error_code:
     pushq   %rax
@@ -77,7 +84,7 @@ error_code:
     pushq   %r15
     cld
 
-    movq    ERRCODE(%rsp),  %rsi    /* 2st parameter */
+    movq    ERRCODE(%rsp),  %rsi    /* 2nd parameter */
     movq    FUNC(%rsp),     %rdx
     movq    $0x10,  %rdi
     movq    %rdi,   %ds
