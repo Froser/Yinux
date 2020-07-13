@@ -1,5 +1,7 @@
 #pragma once
 
+void init_memory();
+
 typedef struct
 {
     unsigned int address1;

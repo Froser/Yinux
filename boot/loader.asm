@@ -179,6 +179,7 @@ Kernel_Loading:
 
     mov         cx,                 [BPB_BytesPerSec]       ; 一个扇区大小
     mov         ax,                 KernelBase
+    mov         fs,                 ax                      ; TODO ONLY Bochs
     mov         edi,                dword [KERNEL_OFS]
 
     mov         ax,                 KernelTmpBase
@@ -218,11 +219,18 @@ Kernel_Loaded:
     ; 之前所有的物理内存均可以废弃
 
     ; 内存信息
-    mov         eax,                KernelOffset
+    mov         ebx,                0
+    mov         edi,                KernelTmpOffset
+
+Get_Mem_Info:
+    mov         eax,                0x0e820
     mov         ecx,                20
     mov         edx,                0x534D4150              ; SMAP
     int         15h
     jc          Mem_Query_Failed
+    add         edi,                20
+    cmp         ebx,                0
+    jne         Get_Mem_Info
     
     ; 准备进入保护模式
     cli                                                     ; 禁止中断
