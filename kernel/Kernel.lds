@@ -5,18 +5,27 @@ SECTIONS
 {
 	. = 0xffff800000000000 + 0x100000;
 
-	.data :
+	.kd :
 	{
-		_data = .;
-		*(.data)
-		_edata = .;
+		_kd = .;
+		*(.kd)
+		_ekd = .;
 	}
+
+	. = 0xffff800000000000 + 0x106000;
 
 	.text :
 	{
 		_text = .;
 		*(.text)
 		_etext = .;
+	}
+
+	.data :
+	{
+		_data = .;
+		*(.data)
+		_edata = .;
 	}
 
 	. = ALIGN(8);

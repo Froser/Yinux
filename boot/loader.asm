@@ -232,6 +232,18 @@ Get_Mem_Info:
     cmp         ebx,                0
     jne         Get_Mem_Info
     
+SVGA:
+    mov         ax,                 4f02h
+    mov         bx,                 4180h                   ; 1440 * 900, 0xe0000000h, 32bits
+    int         10h
+    cmp         ax,                 004Fh
+    jnz         SVGA_Mode_Failed
+    jmp         Go_Protect_Mode
+
+SVGA_Mode_Failed:
+    jmp         $
+
+Go_Protect_Mode:
     ; 准备进入保护模式
     cli                                                     ; 禁止中断
 

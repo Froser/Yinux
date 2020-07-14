@@ -1,5 +1,5 @@
 // GDT Table
-.section .data
+.section .kd,"xa"
 .globl GDT_Table
 
 // Page
@@ -17,20 +17,20 @@ PDPTE:
     .fill       511,8,0
 
 .org 0x3000
-PDE:
+PDE:                                    /* PDE.PS=1, 2MB page size */
     .quad       0x000083
     .quad       0x200083
     .quad       0x400083
     .quad       0x600083
     .quad       0x800083
-    .quad       0xe000083
-    .quad       0xe020083
-    .quad       0xe040083
-    .quad       0xe060083
-    .quad       0xe080083
-    .quad       0xe0a0083
-    .quad       0xe0c0083
-    .quad       0xe0e0083
+    .quad       0xe0000083
+    .quad       0xe0200083
+    .quad       0xe0400083
+    .quad       0xe0600083
+    .quad       0xe0800083
+    .quad       0xe0a00083
+    .quad       0xe0c00083
+    .quad       0xe0e00083
     .fill       499,8,0
 
 GDT_Table:

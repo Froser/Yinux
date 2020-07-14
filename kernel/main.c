@@ -1,9 +1,12 @@
 #include <yinux/trap.h>
-#include "memory.h"
+#include <yinux/kernel.h>
+#include <yinux/memory.h>
 
 void Kernel_Main()
 {
-	sys_vector_init();
-	init_memory();
-	while (1);
+	init_printk();
+	printk("Welcome to Yinux!\n");
+    sys_vector_init();
+    init_memory();
+    while (1);
 }
