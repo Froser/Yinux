@@ -330,10 +330,10 @@ void init_printk()
     g_pos.cs_y = 16;
 
     /* following fields will be got from vbe struct in future */
-    g_pos.fb = (unsigned int*) 0xffff800000a00000;
+    g_pos.fb = (unsigned int*) 0xffff800000a00000; /* physical: 0xe0000000 */
     g_pos.res_x = 1440;
     g_pos.res_y = 900;
-    g_pos.fbl = g_pos.res_x * g_pos.res_y * 32;
+    g_pos.fbl = g_pos.res_x * g_pos.res_y * 4;
 }
 
 static void putck(int bgclr, int fgclr, char ch)
@@ -355,6 +355,30 @@ static void putck(int bgclr, int fgclr, char ch)
     }
 }
 
+/**
+  scroll the screen up for n lines.
+ */
+static void scrollup(int n)
+{
+    if (!n)
+        return;
+
+    /*
+    byte* fbdst = (byte*)(g_pos.fb);
+    byte* fbsrc = (byte*)(g_pos.fb + (g_pos.res_y * n));
+    byte* fbend = (byte*)(g_pos.fb) + g_pos.fbl;
+    while (fbsrc != fbend) {
+        *fbdst = *fbsrc;
+        ++fbdst, ++fbsrc;
+    }
+    while (fbdst != fbend) {
+        *fbdst = 0x00;
+    }
+    g_pos.y -= n;
+    */
+    g_pos.y = 0;
+}
+
 int printk(const char * fmt, ...)
 {
     static char printk_buf[1024];
@@ -370,19 +394,23 @@ int printk(const char * fmt, ...)
         if (ch == '\n') {
             ++g_pos.y;
             g_pos.x = 0;
-        }
-        else if (ch == '\b') {
-            --g_pos.x;
-            if (g_pos.x < 0) {
-                g_pos.x = (g_pos.res_x / g_pos.cs_x + 1) * g_pos.cs_x;
-                --g_pos.y;
-                if (g_pos.y < 0) {
-                    // scroll? todo
-                }
+        } else if (ch == '\t') {
+            int spaces = ((g_pos.x + TAB_INDENTS) & ~(TAB_INDENTS - 1)) - g_pos.x;
+            for (int s = 0; s < spaces; ++s) {
                 putck(bgclr, fgclr, ' ');
+                ++g_pos.x;
             }
+        } else {
+            putck(bgclr, fgclr, ch);
+            ++g_pos.x;
         }
-        putck(bgclr, fgclr, ch);
-        ++g_pos.x;
+    }
+
+    if (g_pos.x >= (g_pos.res_x / g_pos.cs_x)) {
+        ++g_pos.y;
+        g_pos.x = 0;
+    }
+    if (g_pos.y >= (g_pos.res_y / g_pos.cs_y)) {
+        scrollup(1);
     }
 }

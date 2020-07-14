@@ -1,4 +1,5 @@
 #pragma once
+#include <yinux/kernel.h>
 
 void init_memory();
 

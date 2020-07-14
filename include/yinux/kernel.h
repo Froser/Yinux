@@ -75,3 +75,5 @@ int printk(const char * fmt, ...)
     __attribute__ ((format (printf, 1, 2)));
 
 #define dump_stack()            /* call in traps in future */
+
+#define TAB_INDENTS     8
