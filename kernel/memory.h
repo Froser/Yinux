@@ -69,6 +69,8 @@ typedef struct {
     unsigned long end_code;
     unsigned long end_data;
     unsigned long end_brk;
+
+    unsigned long end_of_struct;
 } Global_Memory_Descriptor;
 
 void init_memory();

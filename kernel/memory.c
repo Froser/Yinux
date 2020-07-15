@@ -1,10 +1,19 @@
 #include "memory.h"
 #include <yinux/string.h>
 
-#define PAGE_SHIFT_4K    12      /* PDPTE.PS=0, PDE.PS=1, 2MB page size */
-#define PAGE_SIZE_4K     (1ul << PAGE_SHIFT_4K)
+#define PAGE_SHIFT_4K   12      /* PDPTE.PS=0, PDE.PS=1, 2MB page size */
+#define PAGE_SIZE_4K    (1ul << PAGE_SHIFT_4K)
+
+#define PAGE_OFFSET     ((unsigned long)0xffff800000000000)
+
+/* Virtual address to physics address */
+#define MEM_V2P(addr)   ((unsigned long)(addr) - PAGE_OFFSET)
+
+/* Physics address to virtual address */
+#define MEM_P2V(addr)   ((unsigned long*)((unsigned long)(addr) + PAGE_OFFSET))
 
 static Global_Memory_Descriptor g_mem_descriptor;
+static unsigned long* g_pml4e;
 
 typedef enum {
     MT_Available = 1,
@@ -12,6 +21,26 @@ typedef enum {
     MT_ACPI,
     MT_ACPINVS
 } Memory_Type;
+
+void flush_tlb()
+{
+    unsigned long t;
+    __asm__ __volatile__ (
+        "movq %%cr3, %0     \n\t"
+        "movq %0,    %%cr3  \n\t"
+        :"=r"(t)::"memory"
+        );
+}
+
+unsigned long* get_pml4e()
+{
+    unsigned long* t;
+    __asm__ __volatile__ (
+        "movq %%cr3, %0    \n\t"
+        :"=r"(t)::"memory"
+        );
+    return t;
+}
 
 static const char* memtypestr(unsigned int type)
 {
@@ -56,7 +85,7 @@ void init_memory()
         Memory_E820* m = mem + i;
         g_mem_descriptor.e820[i] = *m;
 
-        printk(KERN_INFO "Address: %#010x, %08x\tLength:%#010x, %08x\tType:%s\n", 
+        printk(KERN_INFO "Address: %#010x,%08x\tLength:%#010x,%08x\tType:%s\n", 
             m->e820_32.address2, m->e820_32.address1, m->e820_32.length2, m->e820_32.length1, memtypestr(m->e820_32.type));
 
         if (m->e820_64.type == MT_Available) {
@@ -93,13 +122,6 @@ void init_memory()
     g_mem_descriptor.zones_length = ALIGN_ADDRESS(5 * sizeof(Memory_Zone), sizeof(long));
     memset(g_mem_descriptor.zones_struct, 0x00, g_mem_descriptor.zones_length);
 
-    printk(KERN_INFO "Memory descriptor's bits map start at %p, size is %#018lx, length is %#018lx\n",
-        g_mem_descriptor.bits_map, g_mem_descriptor.bits_size, g_mem_descriptor.bits_length);
-    printk(KERN_INFO "Memory descriptor's pages structs start at %p, size is %#018lx, length is %#018lx\n",
-        g_mem_descriptor.pages_struct, g_mem_descriptor.pages_size, g_mem_descriptor.pages_length);
-    printk(KERN_INFO "Memory descriptor's zones structs start at %p, size is %#018lx, length is %#018lx\n",
-        g_mem_descriptor.zones_struct, g_mem_descriptor.zones_size, g_mem_descriptor.zones_length);
-
     /* setup zones, pages and bits map */
     for (int i = 0; i < memcount; ++i) {
         unsigned long start, end;
@@ -120,10 +142,10 @@ void init_memory()
                 z->page_free_cnt = (end - start) >> PAGE_SHIFT;
                 z->page_pages_link = 0;
                 z->attribute = 0;
-                z->pages_length = (end - start) >> PAGE_SHIFT;
+                z->pages_length = z->page_free_cnt;
                 z->pages_group = (Memory_Page*)(g_mem_descriptor.pages_struct + (start >> PAGE_SHIFT));
                 p = z->pages_group;
-                for (int j = 0; j < z->pages_length; ++j) {
+                for (int j = 0; j < z->pages_length; ++j, ++p) {
                     p->zones_struct = z;
                     p->phy_addr = start + PAGE_SIZE * j;
                     p->attribute = 0;
@@ -134,5 +156,30 @@ void init_memory()
             }
         }
     }
-    while (1);
+
+    /* we cannot use physics address below 2MB */
+    g_mem_descriptor.pages_struct->zones_struct = g_mem_descriptor.zones_struct;
+    g_mem_descriptor.pages_struct->phy_addr = 0ul;
+    g_mem_descriptor.pages_struct->attribute = 0;
+    g_mem_descriptor.pages_struct->ref_cnt = 0;
+    g_mem_descriptor.pages_struct->age = 0;
+
+    g_mem_descriptor.end_of_struct = (unsigned long)((unsigned long) g_mem_descriptor.zones_struct + g_mem_descriptor.zones_length 
+        + sizeof(long) * 32) & (~(sizeof(long)) - 1); /* Reserved few bytes */
+
+    printk(KERN_INFO "Memory descriptor's bits map start at %p, size is %#018lx, length is %#018lx\n",
+        g_mem_descriptor.bits_map, g_mem_descriptor.bits_size, g_mem_descriptor.bits_length);
+    printk(KERN_INFO "Memory descriptor's pages structs start at %p, size is %#018lx, length is %#018lx\n",
+        g_mem_descriptor.pages_struct, g_mem_descriptor.pages_size, g_mem_descriptor.pages_length);
+    printk(KERN_INFO "Memory descriptor's zones structs start at %p, size is %#018lx, length is %#018lx\n",
+        g_mem_descriptor.zones_struct, g_mem_descriptor.zones_size, g_mem_descriptor.zones_length);
+    printk(KERN_INFO "Memory structs end at %#018lx\n", g_mem_descriptor.end_of_struct);
+
+    /* require and set page table */
+    g_pml4e = get_pml4e();
+    printk(KERN_INFO "Global PML4T: %p\n", g_pml4e);
+    printk(KERN_INFO "Global PDPT: %p\n", *MEM_P2V(g_pml4e));
+    printk(KERN_INFO "Global PDT: %p\n", *MEM_P2V(*MEM_P2V(g_pml4e)));
+
+    flush_tlb();
 }
