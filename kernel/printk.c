@@ -330,7 +330,7 @@ void init_printk()
     g_pos.cs_y = 16;
 
     /* following fields will be got from vbe struct in future */
-    g_pos.fb = (unsigned int*) 0xffff800000a00000; /* physical: 0xe0000000 */
+    g_pos.fb = (unsigned int*) 0xffff800000a00000; /* physics address: 0xe0000000. See also: boot/loader.asm SVGA */
     g_pos.res_x = 1440;
     g_pos.res_y = 900;
     g_pos.fbl = g_pos.res_x * g_pos.res_y * 4;

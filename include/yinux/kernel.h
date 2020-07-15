@@ -26,10 +26,14 @@
 #define __iomem
 /* End of compiler macros */
 
-/* Pages */
+#define ALIGN_ADDRESS(addr, alignment) \
+	(((unsigned long)(addr) + alignment - 1) & (~(alignment - 1)))
 
-#define PAGE_SHIFT      22      /* PDPTE.PS=0, PDE.PS=1, 2MB page size */
-#define PAGE_SIZE       1u << PAGE_SHIFT
+/* Pages */
+#define PAGE_SHIFT      21      /* PDPTE.PS=0, PDE.PS=1, 2MB page size */
+#define PAGE_SIZE       (1ul << PAGE_SHIFT)
+#define PAGE_MASK       (~(PAGE_SIZE - 1))
+#define PAGE_ALIGN(a)   ALIGN_ADDRESS((a), PAGE_SIZE)
 
 /* End of pages */
 

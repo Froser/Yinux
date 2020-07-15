@@ -219,10 +219,12 @@ Kernel_Loaded:
     ; 之前所有的物理内存均可以废弃
 
     ; 内存信息
+    push        esi
     mov         ebx,                0
-    mov         edi,                KernelTmpOffset
+    mov         edi,                KernelTmpOffset + 4
 
 Get_Mem_Info:
+    mov         esi,                ebx
     mov         eax,                0x0e820
     mov         ecx,                20
     mov         edx,                0x534D4150              ; SMAP
@@ -231,6 +233,9 @@ Get_Mem_Info:
     add         edi,                20
     cmp         ebx,                0
     jne         Get_Mem_Info
+
+    mov         [es:KernelTmpOffset],  esi                  ; KernelTmpBase:KernelTmpOffset用于保存结构体数量
+    pop         esi
     
 SVGA:
     mov         ax,                 4f02h
