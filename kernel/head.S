@@ -87,7 +87,7 @@ _start:
     movq        $0x7e00,        %rsp
 
 // setup IDT
-    leaq        _int(%rip),     %rdx
+    leaq        default_int(%rip), %rdx
     movq        $(0x08 << 16),  %rax        /* Segment selector 8 */
     movw        %dx,            %ax
     movq        $(0x8e00 << 32), %rcx       /* IDT: P=1, DPL=0, S=0, Type=1110b (interrupt gate descriptor) */
@@ -151,37 +151,6 @@ entry64:
 go_kernel:
     .quad       Kernel_Main
 
-_int:
+default_int:
     cld
-    pushq       %rax
-    pushq       %rbx
-    pushq       %rcx
-    pushq       %rdx
-    pushq       %rbp
-    pushq       %rdi
-    pushq       %rsi
-    pushq       %r8
-    pushq       %r9
-    pushq       %r10
-    pushq       %r11
-    pushq       %r12
-    pushq       %r13
-    pushq       %r14
-    pushq       %r15
-
-    popq        %r15
-    popq        %r14
-    popq        %r13
-    popq        %r12
-    popq        %r11
-    popq        %r10
-    popq        %r9
-    popq        %r8
-    popq        %rsi
-    popq        %rdi
-    popq        %rbp
-    popq        %rdx
-    popq        %rcx
-    popq        %rbx
-    popq        %rax
-    iretq
+    call        int_failure     /* stuck here */

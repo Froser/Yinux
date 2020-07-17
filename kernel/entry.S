@@ -1,6 +1,21 @@
 #define __ASSEMBLY__
 #include "../include/yinux/linkage.h"
 
+#define T_ENTRY_WITH_ERRCODE(entry)         \
+ENTRY(entry)                                \
+    pushq   $0;                             \
+    pushq   %rax;                           \
+    leaq    do_##entry##(%rip),     %rax;   \
+    xchgq   %rax,   (%rsp);                 \
+    jmp     error_code;
+
+#define T_ENTRY(entry)                      \
+ENTRY(entry)                                \
+    pushq   %rax;                           \
+    leaq    do_##entry##(%rip),       %rax; \
+    xchgq   %rax,   (%rsp);                 \
+    jmp     error_code;
+
 /* Stack layout */
 R15 = 0x00
 R14 = 0x08
@@ -46,21 +61,41 @@ RESTORE_ALL:
     movq    %rax,   %ds   /* pop ds */
     popq    %rax
     movq    %rax,   %es   /* pop es */
-    addq    $0x10,  %rsp
+    addq    $0x10,  %rsp  /* pop FUNC and ERRCODE */
     iretq
 
-ENTRY(divide_error)
-    pushq   $0
+ENTRY(nmi)
     pushq   %rax
-    leaq    do_divide_error(%rip),     %rax
-    xchgq   %rax,   (%rsp)
-    jmp     error_code
+    cld
+    movq    %es,    %rax
+    pushq   %rax          /* push es */
+    movq    %ds,    %rax
+    pushq   %rax          /* push ds */
+    pushq   %rbp
+    pushq   %rdi
+    pushq   %rsi
+    pushq   %rdx
+    pushq   %rcx
+    pushq   %rbx
+    pushq   %r8
+    pushq   %r9
+    pushq   %r10
+    pushq   %r11
+    pushq   %r12
+    pushq   %r13
+    pushq   %r14
+    pushq   %r15
+    movq    $0x10,  %rdx
+    movq    %rdx,   %ds
+    movq    %rdx,   %es
+    movq    $0,     %rsi
+    movq    %rsp,   %rdi
+    callq   do_nmi
+    jmp     RESTORE_ALL
 
-ENTRY(page_fault)
-    pushq   %rax
-    leaq    do_page_fault(%rip),       %rax
-    xchgq   %rax,   (%rsp)
-    jmp     error_code
+T_ENTRY_WITH_ERRCODE(divide_error)
+T_ENTRY(page_fault)
+T_ENTRY(general_protection)
 
 error_code:
     pushq   %rax
@@ -68,6 +103,7 @@ error_code:
     pushq   %rax          /* push es */
     movq    %ds,    %rax
     pushq   %rax          /* push ds */
+    xorq    %rax,   %rax
     pushq   %rbp
     pushq   %rdi
     pushq   %rsi

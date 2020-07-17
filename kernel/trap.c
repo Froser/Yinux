@@ -1,4 +1,5 @@
 #include <yinux/desc_defs.h>
+#include <yinux/kernel.h>
 #include "trap.h"
 
 #define load_TR(n)                        \
@@ -57,6 +58,8 @@ do                                                                          \
 } while(0)
 
 void divide_error();
+void nmi();
+void general_protection();
 void page_fault();
 
 extern gate_struct64 IDT_Table[];
@@ -72,7 +75,18 @@ void set_trap_gate(unsigned int n, unsigned char ist, void* addr)
 }
 
 /* intr handlers */
+void int_failure()
+{
+    printk("Unknown interrupt or fault.\n");
+    while (1);
+}
+
 void do_divide_error(unsigned long rsp, unsigned long error_code)
+{
+    while (1);
+}
+
+void do_nmi(unsigned long rsp, unsigned long error_code)
 {
     while (1);
 }
@@ -86,6 +100,12 @@ void do_page_fault(unsigned long rsp, unsigned long error_code)
     while (1);
 }
 
+void do_general_protection(unsigned long rsp,unsigned long error_code)
+{
+    printk("General protection fault.\n");
+    while (1);
+}
+
 void sys_tss_init()
 {
     load_TR(8); /* ltr $40 */
@@ -96,5 +116,7 @@ void sys_tss_init()
 void sys_vector_init()
 {
     set_trap_gate(X86_TRAP_DE, 1, divide_error);
+    set_intr_gate(X86_TRAP_NMI,1, nmi);
+    set_trap_gate(X86_TRAP_GP, 1, general_protection);
     set_trap_gate(X86_TRAP_PF, 1, page_fault);
 }

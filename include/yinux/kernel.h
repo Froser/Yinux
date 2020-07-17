@@ -78,6 +78,8 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
 int printk(const char * fmt, ...)
     __attribute__ ((format (printf, 1, 2)));
 
+#define sti() \
+{ __asm__ __volatile__ ( "sti":::); }
 
 #define io_out8(port, value) {                  \
     __asm__ __volatile__    (                   \

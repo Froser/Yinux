@@ -26,5 +26,5 @@ enum {
 
 void sys_tss_init();
 void sys_vector_init();
-void sys_interrupt_init();
+void sys_8259A_init();
 void set_intr_gate(unsigned int n, unsigned char ist, void* addr);

@@ -93,10 +93,7 @@ void (*interrupt[24])(void) = {
     IRQ_IMPL(0x37)
 };
 
-#define sti() \
-{ __asm__ __volatile__ ( "sti":::); }
-
-void sys_interrupt_init()
+void sys_8259A_init()
 {
     /* device interrupt vectors start from 32 */
     for (int i = 32; i < 56; ++i) {
@@ -119,6 +116,5 @@ void sys_interrupt_init()
     io_out8(0x21, 0xfd); /* test only keyboard */
     io_out8(0xa1, 0xff);
 
-    sti();
     printk("Interrupt inited.\n");
 }
