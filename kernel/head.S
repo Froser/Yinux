@@ -152,5 +152,4 @@ go_kernel:
     .quad       Kernel_Main
 
 default_int:
-    cld
     call        int_failure     /* stuck here */

@@ -201,5 +201,5 @@ void sys_init_memory()
         page_init(g_mem_descriptor.pages_struct + j, PG_PTable_Mapped | PG_Kernel_Init | PG_Kernel);
     }
 
-    flush_tlb();
+    //flush_tlb();
 }

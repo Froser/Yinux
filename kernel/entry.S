@@ -1,7 +1,7 @@
 #define __ASSEMBLY__
 #include "../include/yinux/linkage.h"
 
-#define T_ENTRY_WITH_ERRCODE(entry)         \
+#define T_ENTRY_NO_ERRCODE(entry)         \
 ENTRY(entry)                                \
     pushq   $0;                             \
     pushq   %rax;                           \
@@ -93,9 +93,22 @@ ENTRY(nmi)
     callq   do_nmi
     jmp     RESTORE_ALL
 
-T_ENTRY_WITH_ERRCODE(divide_error)
+T_ENTRY_NO_ERRCODE(divide_error)
+T_ENTRY_NO_ERRCODE(debug)
+T_ENTRY_NO_ERRCODE(breakpoint)
+T_ENTRY_NO_ERRCODE(overflow)
+T_ENTRY_NO_ERRCODE(bound_range_excceeded);
+T_ENTRY_NO_ERRCODE(invalid_opcode);
+T_ENTRY_NO_ERRCODE(device_not_available);
+T_ENTRY(double_fault);
+T_ENTRY(invalid_tss);
+T_ENTRY(segment_not_present);
+T_ENTRY(stack_segment_fault);
+T_ENTRY(general_protection);
 T_ENTRY(page_fault)
-T_ENTRY(general_protection)
+T_ENTRY_NO_ERRCODE(x87_floating_point_exception);
+T_ENTRY(alignment_check);
+T_ENTRY_NO_ERRCODE(machine_check);
 
 error_code:
     pushq   %rax
