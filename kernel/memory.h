@@ -11,7 +11,7 @@ typedef struct {
     unsigned long           attribute;
     unsigned long           page_using_cnt;
     unsigned long           page_free_cnt;
-    unsigned long           page_pages_link;
+    unsigned long           total_pages_link;
 } Memory_Zone;
 
 typedef struct Memory_Page_t {
@@ -73,4 +73,19 @@ typedef struct {
     unsigned long end_of_struct;
 } Global_Memory_Descriptor;
 
-void init_memory();
+//  mapped=1 or un-mapped=0 
+#define PG_PTable_Mapped (1 << 0)
+
+//  init-code=1 or normal-code/data=0
+#define PG_Kernel_Init  (1 << 1)
+
+//  device=1 or memory=0
+#define PG_Device   (1 << 2)
+
+//  kernel=1 or user=0
+#define PG_Kernel   (1 << 3)
+
+//  shared=1 or single-use=0 
+#define PG_Shared   (1 << 4)
+
+void sys_init_memory();

@@ -6,7 +6,10 @@ void Kernel_Main()
 {
 	init_printk();
 	printk(KERN_INFO "Welcome to Yinux!\n");
+	
+	sys_tss_init();
     sys_vector_init();
-    init_memory();
+    sys_init_memory();
+    sys_interrupt_init();
     while (1);
 }

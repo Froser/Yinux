@@ -78,6 +78,15 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
 int printk(const char * fmt, ...)
     __attribute__ ((format (printf, 1, 2)));
 
+
+#define io_out8(port, value) {                  \
+    __asm__ __volatile__    (                   \
+                    "outb   %0, %%dx    \n\t"   \
+                    "mfence             \n\t"   \
+                    ::"a"((byte)value),"d"(port)\
+                    :"memory" );                \
+}
+
 #define dump_stack()            /* call in traps in future */
 
 #define TAB_INDENTS     8

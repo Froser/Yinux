@@ -24,4 +24,7 @@ enum {
     X86_TRAP_IRET = 32, /* 32, IRET Exception */
 };
 
+void sys_tss_init();
 void sys_vector_init();
+void sys_interrupt_init();
+void set_intr_gate(unsigned int n, unsigned char ist, void* addr);

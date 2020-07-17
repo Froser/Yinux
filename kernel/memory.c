@@ -63,7 +63,28 @@ extern char _etext;
 extern char _edata;
 extern char _end;
 
-void init_memory()
+unsigned long page_init(Memory_Page* page, unsigned long flags)
+{
+    const unsigned long pagecnt = page->phy_addr >> PAGE_SHIFT;
+    if (!page->attribute) {
+        *(g_mem_descriptor.bits_map + (pagecnt >> 6)) |= 1ul << (pagecnt) % 64;
+        page->attribute = flags;
+        ++page->ref_cnt;
+        ++page->zones_struct->page_using_cnt;
+        --page->zones_struct->page_free_cnt;
+        ++page->zones_struct->total_pages_link;
+    /* } else if ((page->attribute & PG_Referenced) || (page->attribute & PG_K_Share_To_U) || (flags & PG_Referenced) || (flags & PG_K_Share_To_U)) {
+        page->attribute |= flags;
+        ++page->ref_cnt;
+        ++page->zones_struct->total_pages_link;
+    */
+    } else {
+        *(g_mem_descriptor.bits_map + (pagecnt >> 6)) |= 1ul << (pagecnt) % 64;
+        page->attribute |= flags;
+    }
+}
+
+void sys_init_memory()
 {
     /* see also Kernel.lds */
     g_mem_descriptor.start_code = (unsigned long)&_text;
@@ -140,7 +161,7 @@ void init_memory()
                 z->zone_length = end - start;
                 z->page_using_cnt = 0;
                 z->page_free_cnt = (end - start) >> PAGE_SHIFT;
-                z->page_pages_link = 0;
+                z->total_pages_link = 0;
                 z->attribute = 0;
                 z->pages_length = z->page_free_cnt;
                 z->pages_group = (Memory_Page*)(g_mem_descriptor.pages_struct + (start >> PAGE_SHIFT));
@@ -175,11 +196,10 @@ void init_memory()
         g_mem_descriptor.zones_struct, g_mem_descriptor.zones_size, g_mem_descriptor.zones_length);
     printk(KERN_INFO "Memory structs end at %#018lx\n", g_mem_descriptor.end_of_struct);
 
-    /* require and set page table */
-    g_pml4e = get_pml4e();
-    printk(KERN_INFO "Global PML4T: %p\n", g_pml4e);
-    printk(KERN_INFO "Global PDPT: %p\n", *MEM_P2V(g_pml4e));
-    printk(KERN_INFO "Global PDT: %p\n", *MEM_P2V(*MEM_P2V(g_pml4e)));
+    int i = MEM_V2P(g_mem_descriptor.end_of_struct) >> PAGE_SHIFT;
+    for (int j = 0; j <= i; ++j) {
+        page_init(g_mem_descriptor.pages_struct + j, PG_PTable_Mapped | PG_Kernel_Init | PG_Kernel);
+    }
 
     flush_tlb();
 }

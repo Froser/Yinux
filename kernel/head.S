@@ -126,8 +126,6 @@ repeat_idt:
     movq        %rax,           64(%rdi)    /* Write TSS to GDT (at 8) */
     shrq        $32,            %rdx
     movq        %rdx,           72(%rdi)
-    mov         $0x40,          %ax
-    ltr         %ax
 
 // load cr3 (Page directory base)
     movq        $0x101007,      %rax
