@@ -1,5 +1,5 @@
 // GDT Table
-.section .kd,"xa"
+.section .data.kernel
 .globl GDT_Table
 
 // Page

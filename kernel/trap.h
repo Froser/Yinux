@@ -24,7 +24,8 @@ enum {
     X86_TRAP_IRET = 32, /* 32, IRET Exception */
 };
 
-void sys_tss_init();
 void sys_vector_init();
 void sys_8259A_init();
 void set_intr_gate(unsigned int n, unsigned char ist, void* addr);
+void set_tss64(void* table, unsigned long rsp0,unsigned long rsp1,unsigned long rsp2,unsigned long ist1,unsigned long ist2,unsigned long ist3,
+unsigned long ist4,unsigned long ist5,unsigned long ist6,unsigned long ist7);

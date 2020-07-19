@@ -15,12 +15,24 @@
 static Global_Memory_Descriptor g_mem_descriptor;
 static unsigned long* g_pml4e;
 
+unsigned long* g_kernelCR3;
+
 typedef enum {
     MT_Available = 1,
     MT_Reserved_Invalid,
     MT_ACPI,
     MT_ACPINVS
 } Memory_Type;
+
+unsigned long* get_kernel_CR3()
+{
+    return g_kernelCR3;
+}
+
+const Global_Memory_Descriptor* get_kernel_memdesc()
+{
+    return &g_mem_descriptor;
+}
 
 void flush_tlb()
 {
@@ -60,8 +72,11 @@ static const char* memtypestr(unsigned int type)
 
 extern char _text;
 extern char _etext;
+extern char _data;
 extern char _edata;
 extern char _end;
+extern char _rodata;
+extern char _erodata;
 
 unsigned long page_init(Memory_Page* page, unsigned long flags)
 {
@@ -84,12 +99,15 @@ unsigned long page_init(Memory_Page* page, unsigned long flags)
     }
 }
 
-void sys_init_memory()
+void sys_memory_init()
 {
     /* see also Kernel.lds */
     g_mem_descriptor.start_code = (unsigned long)&_text;
+    g_mem_descriptor.start_data = (unsigned long)&_data;
     g_mem_descriptor.end_code = (unsigned long)&_etext;
     g_mem_descriptor.end_data = (unsigned long)&_edata;
+    g_mem_descriptor.start_rodata = (unsigned long)&_rodata;
+    g_mem_descriptor.end_rodata = (unsigned long)&_erodata;
     g_mem_descriptor.end_brk = (unsigned long)&_end;
 
     printk(KERN_INFO "Section layouts:\n.code: %#018lx-%#018lx\nend of .data:%#018lx\nbrk:%#018lx\n",
@@ -196,6 +214,7 @@ void sys_init_memory()
         g_mem_descriptor.zones_struct, g_mem_descriptor.zones_size, g_mem_descriptor.zones_length);
     printk(KERN_INFO "Memory structs end at %#018lx\n", g_mem_descriptor.end_of_struct);
 
+    g_kernelCR3 = get_pml4e();
     int i = MEM_V2P(g_mem_descriptor.end_of_struct) >> PAGE_SHIFT;
     for (int j = 0; j <= i; ++j) {
         page_init(g_mem_descriptor.pages_struct + j, PG_PTable_Mapped | PG_Kernel_Init | PG_Kernel);

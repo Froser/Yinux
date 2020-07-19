@@ -16,6 +16,9 @@ ENTRY(entry)                                \
     xchgq   %rax,   (%rsp);                 \
     jmp     error_code;
 
+ENTRY(_stack_start)
+    .quad g_init_task_u + 32768
+
 /* Stack layout */
 R15 = 0x00
 R14 = 0x08

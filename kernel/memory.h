@@ -66,8 +66,11 @@ typedef struct {
 
     /* sections */
     unsigned long start_code;
+    unsigned long start_data;
+    unsigned long start_rodata;
     unsigned long end_code;
     unsigned long end_data;
+    unsigned long end_rodata;
     unsigned long end_brk;
 
     unsigned long end_of_struct;
@@ -88,4 +91,6 @@ typedef struct {
 //  shared=1 or single-use=0 
 #define PG_Shared   (1 << 4)
 
-void sys_init_memory();
+void sys_memory_init();
+unsigned long* get_kernel_CR3();
+const Global_Memory_Descriptor* get_kernel_memdesc();

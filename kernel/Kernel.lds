@@ -5,11 +5,11 @@ SECTIONS
 {
 	. = 0xffff800000000000 + 0x100000;
 
-	.kd :
+	.data.kernel :
 	{
-		_kd = .;
-		*(.kd)
-		_ekd = .;
+		_data.kernel = .;
+		*(.data.kernel)
+		_edata.kernel = .;
 	}
 
 	. = 0xffff800000000000 + 0x106000;
@@ -52,6 +52,11 @@ SECTIONS
 	}
 
 	. = ALIGN(32768);
+
+	.data.init_task :
+	{
+		*(.data.init_task)
+	}
 
 	.bss :
 	{
