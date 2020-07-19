@@ -64,6 +64,10 @@ do                                                                          \
         while (1);                                                          \
     }
 
+#define IMPLEMENT_HANDLER(name, rsp, error_code)                            \
+    void name();                                                            \
+    void do_##name(unsigned long rsp, unsigned long error_code)
+
 NOT_IMPLEMENT_HANDLER(divide_error);
 NOT_IMPLEMENT_HANDLER(debug);
 NOT_IMPLEMENT_HANDLER(nmi);
@@ -105,8 +109,7 @@ void int_failure()
     while (1);
 }
 
-void page_fault();
-void do_page_fault(unsigned long rsp, unsigned long error_code)
+IMPLEMENT_HANDLER(page_fault, rsp, error_code)
 {
     unsigned long *p = 0;
     unsigned long cr2 = 0;
@@ -125,21 +128,21 @@ void sys_tss_init()
 
 void sys_vector_init()
 {
-    set_trap_gate(X86_TRAP_DE, 1, divide_error);
-    set_trap_gate(X86_TRAP_DB, 1, debug);
-    set_intr_gate(X86_TRAP_NMI,1, nmi);
-    set_system_gate(X86_TRAP_BP, 1, breakpoint);
-    set_system_gate(X86_TRAP_OF, 1, overflow);
-    set_system_gate(X86_TRAP_BR, 1, bound_range_excceeded);
-    set_trap_gate(X86_TRAP_UD, 1, invalid_opcode);
-    set_trap_gate(X86_TRAP_NM, 1, device_not_available);
-    set_trap_gate(X86_TRAP_DF, 1, double_fault);
-    set_trap_gate(X86_TRAP_TS, 1, invalid_tss);
-    set_trap_gate(X86_TRAP_NP, 1, segment_not_present);
-    set_trap_gate(X86_TRAP_SS, 1, stack_segment_fault);
-    set_trap_gate(X86_TRAP_GP, 1, general_protection);
-    set_trap_gate(X86_TRAP_PF, 1, page_fault);
-    set_trap_gate(X86_TRAP_MF, 1, x87_floating_point_exception);
-    set_trap_gate(X86_TRAP_AC, 1, alignment_check);
-    set_trap_gate(X86_TRAP_MC, 1, machine_check);
+    set_trap_gate(X86_TRAP_DE, 0, divide_error);
+    set_trap_gate(X86_TRAP_DB, 0, debug);
+    set_intr_gate(X86_TRAP_NMI,0, nmi);
+    set_system_gate(X86_TRAP_BP, 0, breakpoint);
+    set_system_gate(X86_TRAP_OF, 0, overflow);
+    set_system_gate(X86_TRAP_BR, 0, bound_range_excceeded);
+    set_trap_gate(X86_TRAP_UD, 0, invalid_opcode);
+    set_trap_gate(X86_TRAP_NM, 0, device_not_available);
+    set_trap_gate(X86_TRAP_DF, 0, double_fault);
+    set_trap_gate(X86_TRAP_TS, 0, invalid_tss);
+    set_trap_gate(X86_TRAP_NP, 0, segment_not_present);
+    set_trap_gate(X86_TRAP_SS, 0, stack_segment_fault);
+    set_trap_gate(X86_TRAP_GP, 0, general_protection);
+    set_trap_gate(X86_TRAP_PF, 0, page_fault);
+    set_trap_gate(X86_TRAP_MF, 0, x87_floating_point_exception);
+    set_trap_gate(X86_TRAP_AC, 0, alignment_check);
+    set_trap_gate(X86_TRAP_MC, 0, machine_check);
 }
