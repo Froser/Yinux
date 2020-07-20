@@ -48,3 +48,47 @@ Yinux 开发手册
     | 8-9  | 0x40   | 128位TSS段     |
     在头部阶段，IDT中所有条目指向一个默认的中断处理函数int_failure，显示一个未处理的异常，并且进入死循环。在进入内核之后，内核会修改IDT到各自的处理函数。
     一切准备就绪后，它将跳转到内核入口Kernel_Main(位于./kernel/main.c)。
+
+  3) 异常处理
+    按照Intel手册，中断向量0x00-0x20为预设的中断，0x20之后为外部中断。前0x20个中断如下：
+    ```
+    X86_TRAP_DE = 0,    /*  0, Divide-by-zero */
+    X86_TRAP_DB,        /*  1, Debug */
+    X86_TRAP_NMI,       /*  2, Non-maskable Interrupt */
+    X86_TRAP_BP,        /*  3, Breakpoint */
+    X86_TRAP_OF,        /*  4, Overflow */
+    X86_TRAP_BR,        /*  5, Bound Range Exceeded */
+    X86_TRAP_UD,        /*  6, Invalid Opcode */
+    X86_TRAP_NM,        /*  7, Device Not Available */
+    X86_TRAP_DF,        /*  8, Double Fault */
+    X86_TRAP_OLD_MF,    /*  9, Coprocessor Segment Overrun */
+    X86_TRAP_TS,        /* 10, Invalid TSS */
+    X86_TRAP_NP,        /* 11, Segment Not Present */
+    X86_TRAP_SS,        /* 12, Stack Segment Fault */
+    X86_TRAP_GP,        /* 13, General Protection Fault */
+    X86_TRAP_PF,        /* 14, Page Fault */
+    X86_TRAP_SPURIOUS,  /* 15, Spurious Interrupt */
+    X86_TRAP_MF,        /* 16, x87 Floating-Point Exception */
+    X86_TRAP_AC,        /* 17, Alignment Check */
+    X86_TRAP_MC,        /* 18, Machine Check */
+    X86_TRAP_XF,        /* 19, SIMD Floating-Point Exception */
+    X86_TRAP_IRET = 32, /* 32, IRET Exception */
+    ```
+    目前，我们没有使用IA-32e的IST机制，因此还是使用传统的中断调用(ist = 0)。
+    trap.c中提供了3个函数来设置IDT与其对应的处理函数：
+    set_intr_gate: 指定一个中断的处理函数，其中DPL=0 (Ring0)
+    set_trap_gate: 指定一个陷阱的处理函数，其中DPL=0 (Ring0)
+    set_system_gate: 指定一个系统的处理函数，其中DPL=3 (Ring3)
+
+    在Intel文档的描述中，对于没有发生特权级变化的场景下，栈空间不需要被切换，因此栈上内容如下：
+    |         | <-- 被中断之前ESP
+    | EFLGAS  |
+    |   CS    |
+    |   EIP   |
+    | errcode | <-- 进入中断时的ESP
+    | 低地址..|
+
+    在./kernel/entry.S中，记录了中断向量的处理函数。异常处理入口以xxx名称的汇编代码开头，而实际上处理函数为C语言所写的do_xxx，例如异常#DE的devide_error和do_devide_error。
+    异常处理入口，例如devide_error，它首先压栈了一个立即数0，表示它的errcode。需要注意的是，并不是所有预置的中断都带有错误码，因此对于这类中断，压入一个0 '假装'是错误码。对于有errcode的异常，则不需要push $0了。它们分别以T_ENTRY_NO_ERRCODE和T_ENTRY作为区分，区别是前置多push $0了。）
+    紧接着，它缓存rax到栈上，并且获取实际的处理函数的地址do_divide_error到rax，然后调用error_code过程。
+
