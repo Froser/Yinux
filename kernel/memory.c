@@ -4,14 +4,6 @@
 #define PAGE_SHIFT_4K   12      /* PDPTE.PS=0, PDE.PS=1, 2MB page size */
 #define PAGE_SIZE_4K    (1ul << PAGE_SHIFT_4K)
 
-#define PAGE_OFFSET     ((unsigned long)0xffff800000000000)
-
-/* Virtual address to physics address */
-#define MEM_V2P(addr)   ((unsigned long)(addr) - PAGE_OFFSET)
-
-/* Physics address to virtual address */
-#define MEM_P2V(addr)   ((unsigned long*)((unsigned long)(addr) + PAGE_OFFSET))
-
 static Global_Memory_Descriptor g_mem_descriptor;
 static unsigned long* g_pml4e;
 
@@ -221,4 +213,54 @@ void sys_memory_init()
     }
 
     //flush_tlb();
+}
+
+Memory_Page* alloc_pages(int zone, int page_count, unsigned long page_flags)
+{
+    int zone_start = 0, zone_end = 0;
+    unsigned long page = 0;
+    switch (zone) {
+        case zone_dma:
+            zone_start = 0;
+            zone_end = ZONE_DMA_INDEX;
+            break;
+        case zone_normal:
+            zone_start = ZONE_DMA_INDEX;
+            zone_end = ZONE_NORMAL_INDEX;
+            break;
+        case zone_unmapped:
+            zone_start = ZONE_UNMAPPED_INDEX;
+            zone_end = g_mem_descriptor.zones_size - 1;
+            break;
+        default:
+            printk("alloc_pages error with unknown zone type.\n");
+            return NULL;
+    }
+
+    for (int i = zone_start; i <= zone_end; ++i) {
+        Memory_Zone* z = g_mem_descriptor.zones_struct + i;
+        if (z->page_free_cnt < page_count) /* not enough page */
+            continue;
+        unsigned long start = z->zone_start_addr >> PAGE_SHIFT;
+        unsigned long end = z->zone_end_addr >> PAGE_SHIFT;
+        unsigned long lenght = z->zone_length >> PAGE_SHIFT;
+        unsigned long t = 64 - start % 64;
+        for (int j = start; j <= end; j += (j % 64 ? t : 64)) {
+            unsigned long* p = g_mem_descriptor.bits_map + (j >> 6);
+            unsigned long shift = j % 64;
+            for (unsigned long k = shift; k < 64 - shift; ++k) {
+                if (!(((*p >> k) | (*(p + 1) << (64 - k))) & (page_count == 64 ? 0xffffffffffffffffUL : ((1UL << page_count) - 1)))) {
+                    page = j + k - 1;
+                    for (unsigned long l = 0; l < page_count; ++l) {
+                        Memory_Page* x = g_mem_descriptor.pages_struct + page + 1;
+                        page_init(x, page_flags);
+                        return (Memory_Page*)(g_mem_descriptor.pages_struct + page);
+                    }
+                }
+            }
+        }
+
+        printk("Cannot alloc page.\n");
+        return NULL;
+    }
 }

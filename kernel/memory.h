@@ -76,6 +76,14 @@ typedef struct {
     unsigned long end_of_struct;
 } Global_Memory_Descriptor;
 
+#define PAGE_OFFSET     ((unsigned long)0xffff800000000000)
+
+/* Virtual address to physics address */
+#define MEM_V2P(addr)   ((unsigned long)(addr) - PAGE_OFFSET)
+
+/* Physics address to virtual address */
+#define MEM_P2V(addr)   ((unsigned long*)((unsigned long)(addr) + PAGE_OFFSET))
+
 //  mapped=1 or un-mapped=0 
 #define PG_PTable_Mapped (1 << 0)
 
@@ -91,6 +99,17 @@ typedef struct {
 //  shared=1 or single-use=0 
 #define PG_Shared   (1 << 4)
 
+#define ZONE_DMA_INDEX 0
+#define ZONE_NORMAL_INDEX 0      //low 1GB RAM ,was mapped in pagetable
+#define ZONE_UNMAPPED_INDEX 0    //above 1GB RAM,unmapped in pagetable
+
+typedef enum {
+    zone_dma = (1 << 0),
+    zone_normal = (1 << 1),
+    zone_unmapped = (1 << 2)
+} zone_type ;
+
 void sys_memory_init();
 unsigned long* get_kernel_CR3();
 const Global_Memory_Descriptor* get_kernel_memdesc();
+Memory_Page* alloc_pages(int zone, int page_count, unsigned long page_flags);
