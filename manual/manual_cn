@@ -36,44 +36,47 @@ Yinux 开发手册
     头部负责创建正式的页表GDT, TSS, IDT：
     Yinux采用3级页表(PDE.PS=1)，大小为每个物理页2MB。页表表头PML4E位于0x101000。
     Yinux的GDT选择子如下：
-    | 索引 | 选择子 | 描述           |
-    | 0    | 0      | NULL           |
-    | 1    | 0x08   | 内核64位代码段 |
-    | 2    | 0x10   | 内核64位数据段 |
-    | 3    | 0x18   | 用户64位代码段 |
-    | 4    | 0x20   | 用户64位数据段 |
-    | 5    | 0x28   | 内核32位代码段 |
-    | 6    | 0x30   | 内核32位数据段 |
-    | 7    | 0x38   | 未使用         |
-    | 8-9  | 0x40   | 128位TSS段     |
+
+    | 索引 | 选择子 | 描述           | DPL |
+    | 0    | 0      | NULL           |     |
+    | 1    | 0x08   | 内核64位代码段 | 0   |
+    | 2    | 0x10   | 内核64位数据段 | 0   |
+    | 3    | 0x18   | 用户64位代码段 | 3   |
+    | 4    | 0x20   | 用户64位数据段 | 3   |
+    | 5    | 0x28   | 内核32位代码段 | 0   |
+    | 6    | 0x30   | 内核32位数据段 | 0   |
+    | 7    | 0x38   | 未使用         |     |
+    | 8-9  | 0x40   | 128位TSS段     | 0   |
+
     在头部阶段，IDT中所有条目指向一个默认的中断处理函数int_failure，显示一个未处理的异常，并且进入死循环。在进入内核之后，内核会修改IDT到各自的处理函数。
     一切准备就绪后，它将跳转到内核入口Kernel_Main(位于./kernel/main.c)。
 
   3) 异常处理
     按照Intel手册，中断向量0x00-0x20为预设的中断，0x20之后为外部中断。前0x20个中断如下：
-    ```
-    X86_TRAP_DE = 0,    /*  0, Divide-by-zero */
-    X86_TRAP_DB,        /*  1, Debug */
-    X86_TRAP_NMI,       /*  2, Non-maskable Interrupt */
-    X86_TRAP_BP,        /*  3, Breakpoint */
-    X86_TRAP_OF,        /*  4, Overflow */
-    X86_TRAP_BR,        /*  5, Bound Range Exceeded */
-    X86_TRAP_UD,        /*  6, Invalid Opcode */
-    X86_TRAP_NM,        /*  7, Device Not Available */
-    X86_TRAP_DF,        /*  8, Double Fault */
-    X86_TRAP_OLD_MF,    /*  9, Coprocessor Segment Overrun */
-    X86_TRAP_TS,        /* 10, Invalid TSS */
-    X86_TRAP_NP,        /* 11, Segment Not Present */
-    X86_TRAP_SS,        /* 12, Stack Segment Fault */
-    X86_TRAP_GP,        /* 13, General Protection Fault */
-    X86_TRAP_PF,        /* 14, Page Fault */
-    X86_TRAP_SPURIOUS,  /* 15, Spurious Interrupt */
-    X86_TRAP_MF,        /* 16, x87 Floating-Point Exception */
-    X86_TRAP_AC,        /* 17, Alignment Check */
-    X86_TRAP_MC,        /* 18, Machine Check */
-    X86_TRAP_XF,        /* 19, SIMD Floating-Point Exception */
-    X86_TRAP_IRET = 32, /* 32, IRET Exception */
-    ```
+
+    | 助记符    | 向量号 | 描述                          | 错误码 |
+    | #DE       |   0    | Divide-by-zero                |   无   |
+    | #DB       |   1    | Debug                         |   无   |
+    | #NMI      |   2    | Non-maskable Interrupt        |   无   |
+    | #BP       |   3    | Breakpoint                    |   无   |
+    | #OF       |   4    | Overflow                      |   无   |
+    | #BR       |   5    | Bound Range Exceeded          |   无   |
+    | #UD       |   6    | Invalid Opcode                |   无   |
+    | #NM       |   7    | Device Not Available          |   无   |
+    | #DF       |   8    | Double Fault                  |   有   |
+    | #OLD_MF   |   9    | Coprocessor Segment Overrun   |   无   |
+    | #TS       |  10    | Invalid TSS                   |   有   |
+    | #NP       |  11    | Segment Not Present           |   有   |
+    | #SS       |  12    | Stack Segment Fault           |   有   |
+    | #GP       |  13    | General Protection Fault      |   有   |
+    | #PF       |  14    | Page Fault                    |   有   |
+    | #SPURIOUS |  15    | Spurious Interrupt            |   有   |
+    | #MF       |  16    | x87 Floating-Point Exception  |   有   |
+    | #AC       |  17    | Alignment Check               |   有   |
+    | #MC       |  18    | Machine Check                 |   无   |
+    | #XF       |  19    | SIMD Floating-Point Exception |   有   |
+    | #IRET     |  32    | IRET Exception                |   无   |
+
     目前，我们没有使用IA-32e的IST机制，因此还是使用传统的中断调用(ist = 0)。
     trap.c中提供了3个函数来设置IDT与其对应的处理函数：
     set_intr_gate: 指定一个中断的处理函数，其中DPL=0 (Ring0)
@@ -81,14 +84,80 @@ Yinux 开发手册
     set_system_gate: 指定一个系统的处理函数，其中DPL=3 (Ring3)
 
     在Intel文档的描述中，对于没有发生特权级变化的场景下，栈空间不需要被切换，因此栈上内容如下：
-    |         | <-- 被中断之前ESP
+    |         | <-- 被中断之前RSP
     | EFLGAS  |
-    |   CS    |
-    |   EIP   |
-    | errcode | <-- 进入中断时的ESP
+    |  CS     |
+    |  EIP    |
+    | errcode | <-- 进入中断时的RSP
     | 低地址..|
 
     在./kernel/entry.S中，记录了中断向量的处理函数。异常处理入口以xxx名称的汇编代码开头，而实际上处理函数为C语言所写的do_xxx，例如异常#DE的devide_error和do_devide_error。
     异常处理入口，例如devide_error，它首先压栈了一个立即数0，表示它的errcode。需要注意的是，并不是所有预置的中断都带有错误码，因此对于这类中断，压入一个0 '假装'是错误码。对于有errcode的异常，则不需要push $0了。它们分别以T_ENTRY_NO_ERRCODE和T_ENTRY作为区分，区别是前置多push $0了。）
     紧接着，它缓存rax到栈上，并且获取实际的处理函数的地址do_divide_error到rax，然后调用error_code过程。
+    error_code过程主要依次将函数地址do_divide_error, es, ds, rbp, rdi, rsi, rdx, rcx, rbx, r8-r15压入栈保存，此时堆栈内容如下：
+    |         |
+    | EFLGAS  |
+    |  CS     |
+    |  EIP    |
+    | errcode | <-- RSP + 0x90
+    |  func   | <-- RSP + 0x88, func表示函数地址，do_divide_error
+    |  RAX    |
+    |  ES     |
+    |  DS     |
+    |  RBP    |
+    |  RDI    |
+    |  RSI    |
+    |  RDX    |
+    |  RCX    |
+    |  RBX    |
+    |  R8     |
+    |  R9     |
+    |  R10    |
+    |  R11    |
+    |  R12    |
+    |  R13    | <-- RSP + 0x10
+    |  R14    | <-- RSP + 0x08
+    |  R15    | <-- RSP + 0x00
+    |         |
 
+    接下来，将rsp传入rdi，rsp+0x90传入rsi，那么就可以得到一下函数原型:
+    void (*IDT_ENTRY)(unsigned long rsp, unsigned long error_code);
+
+    最后，调用callq *(rsp+0x80)，也就是do_divide_error，跳转到我们真正的处理函数中。
+    当do_divide_error返回时，我们立即跳转到ret_from_exception中，它又紧接着跳转到RESTORE_ALL过程中，还原上述所有堆栈到rax。由于iret指令不会清理func和errcode，因此我们将rsp增加0x10，清理func, errcode，接下来调用iret，恢复EIP, CS和EFLAGS，堆栈达到平衡。
+
+  4) 页表映射
+    IA-32e线型地址空间可以映射为Canonical地址区间(0x0000000000000000-0x00007FFFFFFFFFFF, 0xFFFF800000000000-0xFFFFFFFFFFFFFFFF)，及Non-Canonical地址空间(0x0000800000000000-0xFFFF7FFFFFFFFFFF)。Non-Canonical线性空间无法被访问，否则会触发#GP或#SS异常。
+
+    Yinux内核采用三级页表(PDE.PS=1)，因此每个页大小为2MB。注意，所有的页表以0x1000字节对齐，低12位表示的是页表的flag.
+    一级页表(PML4E)，位于0x1000处：
+    | 值                 | 偏移   |
+    | 0x0000000000102007 | 0x1000 |
+    | 255个空项          | 0x17f8 |
+    | 0x0000000000102007 | 0x1800 |
+    | 255个空项          | 0x1808 |
+
+    二级页表(PDPTE)，位于0x2000处：
+    | 值                 | 偏移   |
+    | 0x0000000000103003 | 0x2000 |
+    | 511个空项          | 0x2008 |
+
+    三级页表(PDE)，位于0x3000处：
+    | 值                 | 偏移   |
+    | 0x0000000000000083 | 0x3000 |
+    | 0x0000000000200083 | 0x3008 |
+    | 0x0000000000200083 | 0x3010 |
+    | 0x0000000000400083 | 0x3018 |
+    | 0x0000000000600083 | 0x3020 |
+    | 0x0000000000800083 | 0x3028 |
+    | 0x00000000e0000083 | 0x3030 |
+    | 0x00000000e0200083 | 0x3038 |
+    | 0x00000000e0400083 | 0x3040 |
+    | 0x00000000e0600083 | 0x3048 |
+    | 0x00000000e0800083 | 0x3050 |
+    | 0x00000000e0a00083 | 0x3058 |
+    | 0x00000000e0c00083 | 0x3060 |
+    | 0x00000000e0e00083 | 0x3068 |
+    | 499个空项目        | 0x3070 |
+
+    可见，内核仅使用0xFFFF800000000000以上的线性地址，并且0xFFFF800000000000线性地址映射到物理地址0x0000000000000000。

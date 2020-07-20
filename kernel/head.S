@@ -118,7 +118,7 @@ repeat_idt:
     addq        %rcx,           %rax
     xorq        %rcx,           %rcx
     movl        %edx,           %ecx
-    andl        $0xffffff,       %ecx
+    andl        $0xffffff,      %ecx
     shlq        $16,            %rcx
     addq        %rcx,           %rax        /* TSS: Segment base */
     addq        $103,           %rax
