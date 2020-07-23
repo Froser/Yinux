@@ -92,3 +92,5 @@ int printk(const char * fmt, ...)
 #define dump_stack()            /* call in traps in future */
 
 #define TAB_INDENTS     8
+
+#define to_pointer(p) ((void*)(p))

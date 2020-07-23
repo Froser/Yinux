@@ -198,12 +198,26 @@ void sys_memory_init()
     g_mem_descriptor.end_of_struct = (unsigned long)((unsigned long) g_mem_descriptor.zones_struct + g_mem_descriptor.zones_length 
         + sizeof(long) * 32) & (~(sizeof(long)) - 1); /* Reserved few bytes */
 
+    printk(KERN_INFO "Memory descriptor address is %p\n", &g_mem_descriptor);
     printk(KERN_INFO "Memory descriptor's bits map start at %p, size is %#018lx, length is %#018lx\n",
         g_mem_descriptor.bits_map, g_mem_descriptor.bits_size, g_mem_descriptor.bits_length);
     printk(KERN_INFO "Memory descriptor's pages structs start at %p, size is %#018lx, length is %#018lx\n",
         g_mem_descriptor.pages_struct, g_mem_descriptor.pages_size, g_mem_descriptor.pages_length);
     printk(KERN_INFO "Memory descriptor's zones structs start at %p, size is %#018lx, length is %#018lx\n",
         g_mem_descriptor.zones_struct, g_mem_descriptor.zones_size, g_mem_descriptor.zones_length);
+    printk(KERN_INFO "Zone details: \n");
+    for (int i = 0; i < g_mem_descriptor.zones_size; ++i) {
+        Memory_Zone* zone = g_mem_descriptor.zones_struct + i;
+        printk(KERN_INFO "Zone start address: %#018lx, end address: %#018lx, length: %#018lx\n", zone->zone_start_addr, zone->zone_end_addr, zone->zone_length);
+
+/*
+        printk(KERN_INFO "Pages details: \n");
+        for (int j = 0; j < zone->pages_length; ++j) {
+            Memory_Page* page = zone->pages_group + j;
+            printk(KERN_INFO "Page physics address: %#018lx\n", page->phy_addr);
+        }
+*/
+    }
     printk(KERN_INFO "Memory structs end at %#018lx\n", g_mem_descriptor.end_of_struct);
 
     g_kernelCR3 = get_pml4e();
@@ -254,8 +268,9 @@ Memory_Page* alloc_pages(int zone, int page_count, unsigned long page_flags)
                     for (unsigned long l = 0; l < page_count; ++l) {
                         Memory_Page* x = g_mem_descriptor.pages_struct + page + 1;
                         page_init(x, page_flags);
-                        return (Memory_Page*)(g_mem_descriptor.pages_struct + page);
+                        printk(KERN_INFO "Page %ld allocated, physics address: %#018lx\n", page, x->phy_addr);
                     }
+                    return (Memory_Page*)(g_mem_descriptor.pages_struct + page);
                 }
             }
         }

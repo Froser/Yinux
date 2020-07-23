@@ -75,7 +75,7 @@ TSS64_BASE:     .quad   TSS64_Table
 
 _start:
     mov         $0x10,          %ax
-    mov         $0x8000,        %esp
+    mov         $0x7e00,        %esp
 
 // load gdt
     lgdt        GDT_POINTER(%rip)
@@ -84,7 +84,7 @@ _start:
     lidt        IDT_POINTER(%rip)
     mov         $0x10,          %ax
     mov         %ax,            %gs
-    movq        $0x8000,        %rsp
+    movq        $0x7e00,        %rsp
 
 // setup IDT
     leaq        default_int(%rip), %rdx
@@ -142,7 +142,7 @@ entry64:
 // call kernel
     mov         $0x10,          %ax
     mov         %ax,            %gs
-    movq        $0xffff800000008000, %rsp   /* restore rsp */
+    movq        $0xffff800000007e00, %rsp   /* restore rsp */
     movq        go_kernel(%rip),%rax
     pushq       $0x08
     pushq       %rax

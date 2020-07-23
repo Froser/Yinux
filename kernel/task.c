@@ -50,6 +50,15 @@ do {                                      \
 
 mm_struct g_init_mm = { 0 };
 
+void printk_tss(const TSS* tss) {
+    printk(KERN_INFO "TSS of %p details:\nrsp0=%p\nrsp1=%p\nrsp2=%p\nist1=%p\nist2=%p\nrsp3=%p\nrsp4=%p\nrsp5=%p\nrsp6=%p\nrsp7=%p\n",
+        tss,
+        to_pointer(tss->rsp0), to_pointer(tss->rsp1), to_pointer(tss->rsp2),
+        to_pointer(tss->ist1), to_pointer(tss->ist2), to_pointer(tss->ist3),
+        to_pointer(tss->ist4), to_pointer(tss->ist5), to_pointer(tss->ist6), to_pointer(tss->ist7)
+        );
+}
+
 task_u g_init_task_u __attribute__((__section__ (".data.init_task"))) = {
     INIT_TASK(g_init_task_u.task)
 };
@@ -202,14 +211,20 @@ void sys_task_init()
     g_init_mm.start_brk = 0;
     g_init_mm.end_brk = gmd->end_brk;
     g_init_mm.start_stack = _stack_start;
+    printk(KERN_INFO "g_init_mm is inited with pml4t %p, start_stack %p\n", g_init_mm.pml4t, to_pointer(g_init_mm.start_stack));
+    /*
     set_tss64(&g_init_thread, g_init_tss[0].rsp0, g_init_tss[0].rsp1, g_init_tss[0].rsp2,
         g_init_tss[0].ist1, g_init_tss[0].ist2, g_init_tss[0].ist3, g_init_tss[0].ist4,
         g_init_tss[0].ist5, g_init_tss[0].ist6, g_init_tss[0].ist7);
     g_init_tss[0].rsp0 = g_init_thread.rsp0;
+*/
+    printk_tss(g_init_tss);
+
     list_init(&g_init_task_u.task.list);
     kernel_thread(init, 10, CLONE_FS | CLONE_FILES | CLONE_SIGHAND);
     g_init_task_u.task.state = task_running;
     Task* current = get_current_task();
+    printk(KERN_INFO "current task address is %p\n", current);
     Task* next = container_of(list_next(&current->list), Task, list);
     switch_to(current, next);
 }

@@ -52,7 +52,7 @@ do                                                                          \
 #define NOT_IMPLEMENT_HANDLER(name)                                         \
     void name();                                                            \
     void do_##name(unsigned long rsp, unsigned long error_code) {           \
-        printk("The method " #name " is not implement. Error code: %ld\n", error_code); \
+        printk(KERN_INFO "The method " #name " is not implement. Error code: %ld\n", error_code); \
         while (1);                                                          \
     }
 
@@ -97,7 +97,7 @@ void set_system_gate(unsigned int n, unsigned char ist, void* addr)
 /* intr handlers */
 void int_failure()
 {
-    printk("Unknown interrupt or fault.\n");
+    printk(KERN_INFO "Unknown interrupt or fault.\n");
     while (1);
 }
 
