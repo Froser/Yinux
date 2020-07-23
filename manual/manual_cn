@@ -161,3 +161,26 @@ Yinux 开发手册
     | 499个空项目        | 0x3070 |
 
     可见，内核仅使用0xFFFF800000000000以上的线性地址，并且0xFFFF800000000000线性地址映射到物理地址0x0000000000000000。
+
+  5) 物理内存划分
+    内核头部head.S中，将rsp设置为0xffff800000008000，对应着物理内存0x0000000000008000。
+    在head.S加载之前，head.S会处理好物理内存的获取和VBE的设置信息。其中，我们通过功号e820, int 15h来获取物理地址分布。0xffff800000007e00存放着内存区域的数量(4字节)，0xffff800000007e04开始存放着内存区域的具体信息，如下所示：
+    ```
+    Address: 0x00000000, 00000000 Length: 0x00000000, 0009f000 Type: Available
+    Address: 0x00000000, 0009f000 Length: 0x00000000, 00001000 Type: Reserved or invalid
+    Address: 0x00000000, 000e8000 Length: 0x00000000, 00018000 Type: Reserved or invalid
+    Address: 0x00000000, 00100000 Length: 0x00000000, 07ef0000 Type: Available
+    Address: 0x00000000, 07ff0000 Length: 0x00000000, 00010000 Type: ACPI
+    Address: 0x00000000, fffc0000 Length: 0x00000000, 00040000 Type: Reserved or invalid
+    ```
+    可以看到，整个物理内存被分为了6段，每一端物理内存的类型都不一样。其中usable表示我们能自由使用的部分，第一部分除外。可以看到我们有0x0000000000100000-0x0000000007ef0000这个区间可以使用。Reserved or invalid表示未映射（不可使用）的地址，它可以用来表示IO映射，映射到PCI设备等，ACPI部分表示ACPI data或者ACPI NVS。
+    在初始化内存信息sys_memory_init(memory.c)中，我们使用下面方法：
+    ```
+    int memcount = *((int*)0xffff800000007e00); /* see also: boot/loader.asm Get_Mem_Info */
+    Memory_E820* mem = (Memory_E820*)0xffff800000007e04;
+    ```
+    直接获取了BIOS返回的E820结构体，其中memcount是Memory_E820的数组数量，例如上面的例子是6。通过(mem + i)可以定位到任意一段。
+    内存全局信息放在了Global_Memory_Descriptor结构中，可以用g_mem_descriptor来访问。它包括数据段、代码段的起始位置，物理内存E820分段信息等，实际上我们只需要关注从第2段开始的Available内存区间即可。
+    Global_Memory_Descriptor中的Memory_Zone结构表示可用的物理内存的区域，如在本例中，就只有一个区域：Address: 0x00000000, 00100000 Length: 0x00000000, 07ef0000 Type: Available。
+    Memory_Page_t结构表示每一个2MB的物理页。它和Memory_Zone是关联起来的，可以有多个页指向同一个Zone，但是是Zone中的不同区域。初始化的时候，我们会初始化Zones和Pages，不过Zones的起始地址会被初始为对齐页表的地址。
+    在初始化每一个Zones和Pages之后，我们将内核的页表地址(CR3)缓存下来，供其它内核模块使用。
