@@ -164,7 +164,7 @@ ENTRY(kernel_thread_func)
     popq    %r10
     popq    %r9
     popq    %r8
-    popq    %rbx
+    popq    %rbx            /* rbx is the fn address in PTrace_regs */
     popq    %rcx
     popq    %rdx
     popq    %rsi
@@ -175,9 +175,34 @@ ENTRY(kernel_thread_func)
     popq    %rax
     movq    %rax,   %es
     popq    %rax            /* restored all registers in PTrace_regs */
+    addq    $0x38,  %rsp    /* move to rsp0 */
 
-    addq    $0x38,  %rsp
-    movq    %rdx,   %rdi
+    movq    %rdx,   %rdi    /* rdx is the arguments in PTrace_regs */
     callq   *%rbx
     movq    %rax,   %rdi
     callq   do_exit
+
+ENTRY(ret_system_call)
+    popq    %r15
+    popq    %r14
+    popq    %r13
+    popq    %r12
+    popq    %r11
+    popq    %r10
+    popq    %r9
+    popq    %r8
+    popq    %rbx            /* rbx is the fn address in PTrace_regs */
+    popq    %rcx
+    popq    %rdx
+    popq    %rsi
+    popq    %rdi
+    popq    %rbp
+    popq    %rax
+    movq    %rax,   %ds
+    popq    %rax
+    movq    %rax,   %es
+    popq    %rax            /* restored all registers in PTrace_regs */
+    addq    $0x38,  %rsp    /* move to rsp0 */
+
+    .byte   0x48
+    sysexit                 /* rdx holds rip of ring3, rcx holds rsp of ring3 */

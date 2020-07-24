@@ -140,11 +140,33 @@ unsigned long do_exit(unsigned long code)
 
 /* Create process */
 void ret_from_intr();
-
 void kernel_thread_func(void);
+void ret_system_call(void);
+
+void do_execve(PTrace_regs* regs)
+{
+    regs->rdx = 0x800000; /* ring3 rip */
+    regs->rcx = 0xa00000; /* ring3 rsp */
+    regs->ds = regs->es = 0;
+    printk(KERN_INFO "do_execve called.\n");
+}
 
 unsigned long init(unsigned long arg)
 {
+    Task* current = get_current_task();
+
+    /* prepare system call to ring3 */
+    current->thread->rip = (unsigned long)ret_system_call;
+    PTrace_regs* regs = (PTrace_regs*)current->thread->rsp;
+
+    /* push current thread's rip, and set rsp. rdx = regs */
+    __asm__ __volatile__ ( "movq %1, %%rsp \n\t"
+                           "pushq %2       \n\t"
+                           "jmp do_execve  \n\t"
+                           ::"D"(regs), "m"(current->thread->rsp),"m"(current->thread->rip)
+                           :"memory"
+                        );
+
     return 1;
 }
 
@@ -171,7 +193,7 @@ unsigned long do_fork(PTrace_regs* regs, unsigned long clone_flags, unsigned lon
     thd->rip = regs->rip;
     thd->rsp = thd->rsp0 - sizeof(PTrace_regs);
     if (!(task->flags & pf_kthread)) /* if is not a kernel process, process's entry is ret_from_intr */
-        thd->rip = regs->rip = (unsigned long)ret_from_intr;
+        thd->rip = regs->rip = (unsigned long)ret_system_call;
 
     /* put PTrace_regs at the top of the process stack */
     memcpy((void*)((unsigned long)task + STACK_SIZE - sizeof(PTrace_regs)), regs, sizeof(PTrace_regs));
@@ -198,7 +220,11 @@ int kernel_thread(unsigned long (*fn)(unsigned long), unsigned long arg, unsigne
 extern unsigned long _stack_start;
 void sys_task_init()
 {
-    load_TR(8);
+    load_TR(10);
+
+    /* set addresses of ring3 */
+    wrmsr(IA32_SYSENTER_CS, KERNEL_CS);
+
     const Global_Memory_Descriptor* gmd = get_kernel_memdesc();
     g_init_mm.pml4t = get_kernel_CR3();
     g_init_mm.start_code = gmd->start_code;

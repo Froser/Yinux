@@ -27,7 +27,7 @@
 /* End of compiler macros */
 
 #define ALIGN_ADDRESS(addr, alignment) \
-	(((unsigned long)(addr) + alignment - 1) & (~(alignment - 1)))
+    (((unsigned long)(addr) + alignment - 1) & (~(alignment - 1)))
 
 /* Pages */
 #define PAGE_SHIFT      21      /* PDPTE.PS=0, PDE.PS=1, 2MB page size */
@@ -94,3 +94,36 @@ int printk(const char * fmt, ...)
 #define TAB_INDENTS     8
 
 #define to_pointer(p) ((void*)(p))
+
+/* Fast system call */
+static unsigned long rdmsr(unsigned long address)
+{
+    unsigned int tmp0 = 0;
+    unsigned int tmp1 = 0;
+    __asm__ __volatile__ ("rdmsr \n\t":"=d"(tmp0),"=a"(tmp1):"c"(address):"memory");
+    return (unsigned long)tmp0 << 32 | tmp1;
+}
+
+static void wrmsr(unsigned long address,unsigned long value)
+{
+    __asm__ __volatile__ ("wrmsr \n\t"::"d"(value >> 32),"a"(value & 0xffffffff),"c"(address):"memory"); 
+}
+
+/* (MSR address 174H) — The lower 16 bits of this MSR are the segment selector for the privilege level 0 code segment.
+ This value is also used to determine the segment selector of the privilege level 0 stack segment (see the Operation section).
+ This value cannot indicate a null selector. 
+ */
+#define IA32_SYSENTER_CS (0x174)
+
+/*
+ (MSR address 175H) — The value of this MSR is loaded into RSP (thus, this value contains the stack pointer for the privilege level 0 stack).
+ This value cannot represent a non-canonical address.
+ In protected mode, only bits 31:0 are loaded.
+ */
+#define IA32_SYSENTER_ESP (0x175)
+
+/*
+ (MSR address 176H) — The value of this MSR is loaded into RIP (thus, this value references the first instruction of the selected operating procedure or routine).
+ In protected mode, only bits 31:0 are loaded.
+ */
+#define IA32_SYSENTER_EIP (0x176)
