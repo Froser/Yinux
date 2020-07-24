@@ -7,12 +7,12 @@
 #include <yinux/list.h>
 #include <yinux/sched.h>
 
-#define load_TR(n)                        \
-do {                                      \
-    __asm__ __volatile__( "ltr  %%ax"     \
-        :                                 \
-        :"a"(n << 3)                      \
-        :"memory");                       \
+#define load_TR(n)                      \
+do {                                    \
+    __asm__ __volatile__( "ltr  %%ax"   \
+        :                               \
+        :"a"(n << 3)                    \
+        :"memory");                     \
 } while(0)
 
 #define INIT_RSP0 ((unsigned long)(g_init_task_u.stack + STACK_SIZE / sizeof(unsigned long)))
@@ -138,16 +138,50 @@ unsigned long do_exit(unsigned long code)
     while(1);
 }
 
+/* syscall */
+unsigned long no_system_call(PTrace_regs* regs)
+{
+    printk(KERN_INFO "System call not handled with rax %ld\n", regs->rax);
+    return 2;
+}
+
+#define MAX_SYSCALL_NR 128
+typedef unsigned long (*system_call_t)(PTrace_regs* regs);
+system_call_t g_system_call_table[MAX_SYSCALL_NR] = {
+    [0 ... MAX_SYSCALL_NR - 1] = no_system_call
+};
+
+unsigned long system_call_function(PTrace_regs* regs)
+{
+    return g_system_call_table[regs->rax](regs);
+}
+
 /* Create process */
 void ret_from_intr();
 void kernel_thread_func(void);
 void ret_system_call(void);
+void system_call(void);
+
+void test_user_code()
+{
+    long ret;
+    /* store return address and current rsp for sysexit */
+    __asm__ __volatile__ ( "leaq sysexit_return_address(%%rip), %%rdx \n\t"
+                           "movq %%rsp, %%rcx                         \n\t"
+                           "sysenter                                  \n\t"
+                           "sysexit_return_address:                   \n\t"
+                           :"=a"(ret):"0"(15):"memory"
+                         );
+    while (1);
+}
+void test_user_code_end() {}
 
 void do_execve(PTrace_regs* regs)
 {
     regs->rdx = 0x800000; /* ring3 rip */
     regs->rcx = 0xa00000; /* ring3 rsp */
     regs->ds = regs->es = 0;
+    memcpy(to_pointer(regs->rdx), test_user_code, test_user_code_end - test_user_code);
     printk(KERN_INFO "do_execve called.\n");
 }
 
@@ -192,7 +226,8 @@ unsigned long do_fork(PTrace_regs* regs, unsigned long clone_flags, unsigned lon
     thd->rsp0 = (unsigned long)task + STACK_SIZE;
     thd->rip = regs->rip;
     thd->rsp = thd->rsp0 - sizeof(PTrace_regs);
-    if (!(task->flags & pf_kthread)) /* if is not a kernel process, process's entry is ret_from_intr */
+    printk("task flags is %ld\n", task->flags);
+    if (!(task->flags & pf_kthread)) /* if is not a kernel process, process's entry is ret_system_call */
         thd->rip = regs->rip = (unsigned long)ret_system_call;
 
     /* put PTrace_regs at the top of the process stack */
@@ -222,8 +257,10 @@ void sys_task_init()
 {
     load_TR(10);
 
-    /* set addresses of ring3 */
+    /* set addresses of ring3 to ring0 */
     wrmsr(IA32_SYSENTER_CS, KERNEL_CS);
+    wrmsr(IA32_SYSENTER_ESP, get_current_task()->thread->rsp0);
+    wrmsr(IA32_SYSENTER_EIP, (unsigned long)system_call);
 
     const Global_Memory_Descriptor* gmd = get_kernel_memdesc();
     g_init_mm.pml4t = get_kernel_CR3();

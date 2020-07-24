@@ -1,7 +1,6 @@
 #pragma once
 
-typedef struct
-{
+typedef struct {
     unsigned long r15;
     unsigned long r14;
     unsigned long r13;

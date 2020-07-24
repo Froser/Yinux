@@ -1,7 +1,7 @@
 #define __ASSEMBLY__
 #include "../include/yinux/linkage.h"
 
-#define T_ENTRY_NO_ERRCODE(entry)         \
+#define T_ENTRY_NO_ERRCODE(entry)           \
 ENTRY(entry)                                \
     pushq   $0;                             \
     pushq   %rax;                           \
@@ -36,7 +36,7 @@ RDI = 0x60
 RBP = 0x68
 DS = 0x70
 ES = 0x78
-RAX = 0x08
+RAX = 0x80
 FUNC = 0x88
 ERRCODE = 0x90
 RIP = 0x98
@@ -182,6 +182,36 @@ ENTRY(kernel_thread_func)
     movq    %rax,   %rdi
     callq   do_exit
 
+ENTRY(system_call)
+    sti                     /* we must do sti after sysenter */
+    subq    $0x38,  %rsp    /* the initialized rsp is thread->rsp0, %rsp - 0x38 = &PTrace_regs::rax */
+    cld
+    pushq   %rax            /* start to store registers */
+    movq    %es,    %rax
+    pushq   %rax
+    movq    %ds,    %rax
+    pushq   %rax
+    pushq   %rbp
+    pushq   %rdi
+    pushq   %rsi
+    pushq   %rdx
+    pushq   %rcx
+    pushq   %rbx
+    pushq   %r8
+    pushq   %r9
+    pushq   %r10
+    pushq   %r11
+    pushq   %r12
+    pushq   %r13
+    pushq   %r14
+    pushq   %r15
+    movq    $0x10,  %rdx
+    movq    %rdx,   %ds
+    movq    %rdx,   %es
+    movq    %rsp,   %rdi   /* rsp is the address of PTrace_regs */
+    callq   system_call_function
+    movq    %rax,   RAX(%rsp)  /* save syscall result to PTrace_regs::rax */
+
 ENTRY(ret_system_call)
     popq    %r15
     popq    %r14
@@ -204,5 +234,6 @@ ENTRY(ret_system_call)
     popq    %rax            /* restored all registers in PTrace_regs */
     addq    $0x38,  %rsp    /* move to rsp0 */
 
+    sti
     .byte   0x48
     sysexit                 /* rdx holds rip of ring3, rcx holds rsp of ring3 */

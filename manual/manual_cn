@@ -89,12 +89,12 @@ Yinux 开发手册
     |  CS     |
     |  EIP    |
     | errcode | <-- 进入中断时的RSP
-    | 低地址..|
+    | 低地址.. |
 
     在./kernel/entry.S中，记录了中断向量的处理函数。异常处理入口以xxx名称的汇编代码开头，而实际上处理函数为C语言所写的do_xxx，例如异常#DE的devide_error和do_devide_error。
     异常处理入口，例如devide_error，它首先压栈了一个立即数0，表示它的errcode。需要注意的是，并不是所有预置的中断都带有错误码，因此对于这类中断，压入一个0 '假装'是错误码。对于有errcode的异常，则不需要push $0了。它们分别以T_ENTRY_NO_ERRCODE和T_ENTRY作为区分，区别是前置多push $0了。）
     紧接着，它缓存rax到栈上，并且获取实际的处理函数的地址do_divide_error到rax，然后调用error_code过程。
-    error_code过程主要依次将函数地址do_divide_error, es, ds, rbp, rdi, rsi, rdx, rcx, rbx, r8-r15压入栈保存，此时堆栈内容如下：
+    error_code过程主要依次将函数地址do_divide_error, es, ds, rbp, rdi, rsi, rdx, rcx, rbx, r8-r15压入栈保存，此时堆栈内容如下(PTrace_regs)：
     |         |
     | EFLGAS  |
     |  CS     |
