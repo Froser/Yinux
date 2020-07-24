@@ -163,7 +163,6 @@ Yinux 开发手册
     可见，内核仅使用0xFFFF800000000000以上的线性地址，并且0xFFFF800000000000线性地址映射到物理地址0x0000000000000000。
 
   5) 物理内存划分
-    内核头部head.S中，将rsp设置为0xffff800000008000，对应着物理内存0x0000000000008000。
     在head.S加载之前，head.S会处理好物理内存的获取和VBE的设置信息。其中，我们通过功号e820, int 15h来获取物理地址分布。0xffff800000007e00存放着内存区域的数量(4字节)，0xffff800000007e04开始存放着内存区域的具体信息，如下所示：
     ```
     Address: 0x00000000, 00000000 Length: 0x00000000, 0009f000 Type: Available
@@ -184,3 +183,31 @@ Yinux 开发手册
     Global_Memory_Descriptor中的Memory_Zone结构表示可用的物理内存的区域，如在本例中，就只有一个区域：Address: 0x00000000, 00100000 Length: 0x00000000, 07ef0000 Type: Available。
     Memory_Page_t结构表示每一个2MB的物理页。它和Memory_Zone是关联起来的，可以有多个页指向同一个Zone，但是是Zone中的不同区域。初始化的时候，我们会初始化Zones和Pages，不过Zones的起始地址会被初始为对齐页表的地址。
     在初始化每一个Zones和Pages之后，我们将内核的页表地址(CR3)缓存下来，供其它内核模块使用。
+
+  6) 进程结构
+    在进入Kernel_Main()之后，可以认为这是Yinux的第0个进程。接下来马上会创建第1个进程——init进程。
+    每一个进程共用一块STACK_SIZE的空间，并且按照STACK_SIZE对齐。在Yinux中，STACK_SIZE为0x8000 (32kb)。在task.c中，我们会创建一个init进程的union结构task_u，并且将其放在.data.init_task中。Kernel.lds中定义了这个init进程一定是0x8000对齐。在这个32kb的进程空间内，分布如下：
+
+    |     栈顶     | <- 0x8000, thread->rsp0
+    |  PTrace_regs | <- 0x8000 - sizeof(PTrace_regs), thread->rsp
+    |     ....     |
+    |    Thread    | <- sizeof(Task) + sizeof(Thread)
+    |     Task     | <- sizeof(Task), 0x0000
+
+    在控制进入Kernel_Main()之前，rsp被设置为了_stack_start，_stack_start为init进程基地址+STACK_SIZE，也就是init进程栈顶，所以最开始的get_current_task就是init进程。
+
+    进程与进程之间使用List连接起来。由于每一个Task一定是0x8000对齐，因此我们只需要将当前的rsp与0xffffffffffff8000做与运算，便可以得到Task的地址了：
+    ```
+    Task* get_current_task()
+    {
+        /* Task struct is 32KB aligned. So we can just move %rsp to its alignment to get the task union. */
+        /* Task struct in task union shares the same address of stack_start. */
+        Task* current = NULL;
+        __asm__ __volatile__ ("andq %%rsp, %0 \n\t":"=r"(current):"0"(~32767UL)); /* ~32767UL = 0xffffffffffff8000 */
+        return current;
+    }
+    ```
+
+    我们通过kernel_thread创建一个新进程，并且追加到init进程List前面。们通过kernel_thread指定这个进程的入口、将寄存器相关信息传入PTrace_regs中等，它调用do_fork，它通过alloc_pages获取一块新的物理页，然后在底部构建Task结构，在Task上方创建Thread结构。其中将堆栈基地址rsp0设置为栈顶0x8000。在栈顶下方构造PTrace_regs，因此进程实际可使用的栈空间为 sizeof(Task) + sizeof(Thread) 到 0x8000，因此rsp设置为rsp0 - sizeof(PTrace_regs)，最后，它将创建好的Task通过list_push_front追加到init进程前面。
+
+    switch_to用于切换进程，缓存了前一个和下一个进程的rsp，并且将下一个进程的rip压入栈中，最后跳转到__switch_to交换fs和gs，那么在__switch_to返回时，控制流程便会跳转到下一个进程的rip中了。此时rsp指向的是进程空间中的PTrace_regs，通过一连串pop，还原PTrace_regs中的寄存器。PTrace_regs已经用于还原寄存器了，因此不再有用处，所以通过`addq $0x38,  %rsp`，让rsp彻底回到栈顶(rsp0)。

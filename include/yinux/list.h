@@ -27,10 +27,10 @@ static List* list_next(List* entry)
         return NULL;
 }
 
-static void list_push_front(List* entry, List * n)
+static void list_push_front(List* entry, List* newEntry)
 {
-    n->next = entry;
-    entry->prev->next = n;
-    n->prev = entry->prev;
-    entry->prev = n;
+    newEntry->next = entry;
+    entry->prev->next = newEntry;
+    newEntry->prev = entry->prev;
+    entry->prev = newEntry;
 }
