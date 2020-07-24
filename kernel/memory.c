@@ -111,13 +111,18 @@ void sys_memory_init()
     unsigned long pagetotal = 0;
     g_mem_descriptor.e820_len = memcount;
 
+#if KERNEL_VERBOSE
     printk(KERN_INFO "Memory info blocks (%d):\n", memcount);
+#endif
+
     for (int i = 0; i < memcount; ++i) {
         Memory_E820* m = mem + i;
         g_mem_descriptor.e820[i] = *m;
 
+        #if KERNEL_VERBOSE
         printk(KERN_INFO "Address: %#010x,%08x\tLength:%#010x,%08x\tType:%s\n", 
             m->e820_32.address2, m->e820_32.address1, m->e820_32.length2, m->e820_32.length1, memtypestr(m->e820_32.type));
+        #endif
 
         if (m->e820_64.type == MT_Available) {
             unsigned long start, end;
@@ -268,7 +273,7 @@ Memory_Page* alloc_pages(int zone, int page_count, unsigned long page_flags)
                     for (unsigned long l = 0; l < page_count; ++l) {
                         Memory_Page* x = g_mem_descriptor.pages_struct + page + 1;
                         page_init(x, page_flags);
-                        printk(KERN_INFO "Page %ld allocated, physics address: %#018lx\n", page, x->phy_addr);
+                        printk(KERN_INFO "Page %ld allocated, physics address: %#018lx\n", page, (g_mem_descriptor.pages_struct + page)->phy_addr);
                     }
                     return (Memory_Page*)(g_mem_descriptor.pages_struct + page);
                 }

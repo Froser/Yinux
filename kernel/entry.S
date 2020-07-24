@@ -150,3 +150,34 @@ ret_from_exception:
 
 ENTRY(ret_from_intr)
     jmp     RESTORE_ALL
+
+
+/* When control enters kernel_thread_func_, rsp should be thread's rsp0 + sizeof(PTrace_regs).
+   We just pop values in sequence to restore registers of current PTrace_regs. 
+ */
+ENTRY(kernel_thread_func)
+    popq    %r15
+    popq    %r14
+    popq    %r13
+    popq    %r12
+    popq    %r11
+    popq    %r10
+    popq    %r9
+    popq    %r8
+    popq    %rbx
+    popq    %rcx
+    popq    %rdx
+    popq    %rsi
+    popq    %rdi
+    popq    %rbp
+    popq    %rax
+    movq    %rax,   %ds
+    popq    %rax
+    movq    %rax,   %es
+    popq    %rax            /* restored all registers in PTrace_regs */
+
+    addq    $0x38,  %rsp
+    movq    %rdx,   %rdi
+    callq   *%rbx
+    movq    %rax,   %rdi
+    callq   do_exit

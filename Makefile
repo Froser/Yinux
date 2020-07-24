@@ -1,4 +1,4 @@
-GCC_FLAGS := -mcmodel=large -fno-builtin -fno-stack-protector -m64 -I ./include
+GCC_FLAGS := -mcmodel=large -fno-builtin -fno-stack-protector -m64 -I ./include -DKERNEL_VERBOSE=0
 
 all: system
 	objcopy -I elf64-x86-64 -S -R ".eh_frame" -R ".comment" -O binary ./bin/system ./bin/kernel.bin

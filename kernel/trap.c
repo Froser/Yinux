@@ -52,7 +52,7 @@ do                                                                          \
 #define NOT_IMPLEMENT_HANDLER(name)                                         \
     void name();                                                            \
     void do_##name(unsigned long rsp, unsigned long error_code) {           \
-        printk(KERN_INFO "The method " #name " is not implement. Error code: %ld\n", error_code); \
+        printk(KERN_CRIT "The method " #name " is not implement. Error code: %ld\n", error_code); \
         while (1);                                                          \
     }
 
@@ -97,7 +97,7 @@ void set_system_gate(unsigned int n, unsigned char ist, void* addr)
 /* intr handlers */
 void int_failure()
 {
-    printk(KERN_INFO "Unknown interrupt or fault.\n");
+    printk(KERN_CRIT "Unknown interrupt or fault.\n");
     while (1);
 }
 
@@ -107,7 +107,7 @@ IMPLEMENT_HANDLER(page_fault, rsp, error_code)
     unsigned long cr2 = 0;
     __asm__ __volatile__ ("movq %%cr2, %0":"=r"(cr2)::"memory");
     p = (unsigned long*)(rsp + 0x98);  /* RIP */
-    printk("Page fault at %#018lx\n", cr2);
+    printk(KERN_CRIT "Page fault at %#018lx\n", cr2);
     while (1);
 }
 

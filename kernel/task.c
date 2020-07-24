@@ -15,13 +15,14 @@ do {                                      \
         :"memory");                       \
 } while(0)
 
-#define INIT_TASK_RSP0 ((unsigned long)(g_init_task_u.stack + STACK_SIZE / sizeof(unsigned long)))
+#define INIT_RSP0 ((unsigned long)(g_init_task_u.stack + STACK_SIZE / sizeof(unsigned long)))
 
 #define INIT_TASK(tsk)                  \
 {                                       \
     .state = task_uninterruptible,      \
     .flags = pf_kthread,                \
     .mm = &g_init_mm,                   \
+    .thread = &g_init_thread,           \
     .addr_limit = 0xffff800000000000,   \
     .pid = 0,                           \
     .counter = 1,                       \
@@ -32,9 +33,9 @@ do {                                      \
 #define INIT_TSS                        \
 {                                       \
     .reserved0 = 0,                     \
-    .rsp0 = INIT_TASK_RSP0,             \
-    .rsp1 = INIT_TASK_RSP0,             \
-    .rsp2 = INIT_TASK_RSP0,             \
+    .rsp0 = INIT_RSP0,                  \
+    .rsp1 = INIT_RSP0,                  \
+    .rsp2 = INIT_RSP0,                  \
     .reserved1 = 0,                     \
     .ist1 = 0xffff800000007c00,         \
     .ist2 = 0xffff800000007c00,         \
@@ -51,7 +52,7 @@ do {                                      \
 mm_struct g_init_mm = { 0 };
 
 void printk_tss(const TSS* tss) {
-    printk(KERN_INFO "TSS of %p details:\nrsp0=%p\nrsp1=%p\nrsp2=%p\nist1=%p\nist2=%p\nrsp3=%p\nrsp4=%p\nrsp5=%p\nrsp6=%p\nrsp7=%p\n",
+    printk(KERN_INFO "TSS of 0x%p details:\nrsp0=0x%p\nrsp1=0x%p\nrsp2=0x%p\nist1=0x%p\nist2=0x%p\nist3=0x%p\nist4=0x%p\nist5=0x%p\nist6=0x%p\nist7=0x%p\n",
         tss,
         to_pointer(tss->rsp0), to_pointer(tss->rsp1), to_pointer(tss->rsp2),
         to_pointer(tss->ist1), to_pointer(tss->ist2), to_pointer(tss->ist3),
@@ -59,13 +60,24 @@ void printk_tss(const TSS* tss) {
         );
 }
 
+void printk_task(const Task* task) {
+    printk(KERN_INFO "The task in %p details:\npid: %ld\nthread.rsp0=%#018lx\nthread.rip=%#018lx\n"
+        "thread.rsp=%#018lx\nthread.fs=%#018lx\nthread.gs=%#018lx\nthread.cr2=%#018lx\n"
+        "thread.trap_nr=%#018lx\nthread.error_code=%#018lx\n",
+        task, task->pid, task->thread->rsp0, task->thread->rip, task->thread->rsp, task->thread->fs,
+        task->thread->gs, task->thread->cr2, task->thread->trap_nr, task->thread->error_code);
+}
+
+/* Init task and stack space union, thread and tss */
+extern Thread g_init_thread;
 task_u g_init_task_u __attribute__((__section__ (".data.init_task"))) = {
     INIT_TASK(g_init_task_u.task)
 };
-
+Task* g_init_task[NR_CPUS] = { &g_init_task_u.task };
+TSS g_init_tss[NR_CPUS] = { [0 ... NR_CPUS - 1] = INIT_TSS };
 Thread g_init_thread = {
-    .rsp0 = INIT_TASK_RSP0,
-    .rsp = INIT_TASK_RSP0,
+    .rsp0 = INIT_RSP0,
+    .rsp = INIT_RSP0,
     .fs = KERNEL_DS,
     .gs = KERNEL_DS,
     .cr2 = 0,
@@ -73,10 +85,10 @@ Thread g_init_thread = {
     .error_code = 0
 };
 
-TSS g_init_tss[NR_CPUS] = { [0 ... NR_CPUS - 1] = INIT_TSS };
-
 Task* get_current_task()
 {
+    /* Task struct is 32KB aligned. So we can just move %rsp to its alignment to get the task union. */
+    /* Task struct in task union shares the same address of stack_start. */
     Task* current = NULL;
     __asm__ __volatile__ ("andq %%rsp, %0 \n\t":"=r"(current):"0"(~32767UL)); /* ~32767UL = 0xffffffffffff8000 */
     return current;
@@ -103,16 +115,20 @@ do {                                                                            
                         );                                                                          \
 } while (0);
 
-/* RDI = prev, RSI = next */
+/* RDI = prev, RSI = next. 
+  next thread's rip has been put before jump to this function. 
+  So the task will be switched after this return.
+  */
 void __switch_to(Task* prev, Task* next)
 {
+    printk(KERN_INFO "prev task(0x%p) thread rip: %#018lx, rsp: %#018lx\nnext task(0x%p) thread rip: %#018lx, rsp: %#018lx\n",
+        prev, prev->thread->rip, prev->thread->rsp,
+        next, next->thread->rip, next->thread->rsp);
+
     g_init_tss[0].rsp0 = next->thread->rsp0;
-    set_tss64(&g_init_tss[0], g_init_tss[0].rsp0, g_init_tss[0].rsp1, g_init_tss[0].rsp2,
-        g_init_tss[0].ist1, g_init_tss[0].ist2, g_init_tss[0].ist3, g_init_tss[0].ist4,
-        g_init_tss[0].ist5, g_init_tss[0].ist6, g_init_tss[0].ist7);
     __asm__ __volatile__ ("movq %%fs, %0 \n\t":"=a"(prev->thread->fs));
     __asm__ __volatile__ ("movq %%gs, %0 \n\t":"=a"(prev->thread->gs));
-    __asm__ __volatile__ ("movq %0, %%gs \n\t"::"a"(next->thread->gs));
+    __asm__ __volatile__ ("movq %0, %%gs \n\t"::"a"(next->thread->fs));
     __asm__ __volatile__ ("movq %0, %%fs \n\t"::"a"(next->thread->gs));
 }
 
@@ -124,67 +140,50 @@ unsigned long do_exit(unsigned long code)
 
 /* Create process */
 void ret_from_intr();
-void kernel_thread_func();
-__asm__ (
-"kernel_thread_func:        \n\t"
-"   popq    %r15            \n\t"
-"   popq    %r14            \n\t"   
-"   popq    %r13            \n\t"   
-"   popq    %r12            \n\t"   
-"   popq    %r11            \n\t"   
-"   popq    %r10            \n\t"   
-"   popq    %r9             \n\t"   
-"   popq    %r8             \n\t"   
-"   popq    %rbx            \n\t"   
-"   popq    %rcx            \n\t"   
-"   popq    %rdx            \n\t"   
-"   popq    %rsi            \n\t"   
-"   popq    %rdi            \n\t"   
-"   popq    %rbp            \n\t"   
-"   popq    %rax            \n\t"   
-"   movq    %rax,   %ds     \n\t"
-"   popq    %rax            \n\t"
-"   movq    %rax,   %es     \n\t"
-"   popq    %rax            \n\t"
-"   addq    $0x38,  %rsp    \n\t"
-/////////////////////////////////
-"   movq    %rdx,   %rdi    \n\t"
-"   callq   *%rbx           \n\t"
-"   movq    %rax,   %rdi    \n\t"
-"   callq   do_exit         \n\t"
-);
+
+void kernel_thread_func(void);
 
 unsigned long init(unsigned long arg)
 {
     return 1;
 }
 
-unsigned long do_fork(pt_regs* regs, unsigned long clone_flags, unsigned long stack_start, unsigned long stack_size)
+unsigned long do_fork(PTrace_regs* regs, unsigned long clone_flags, unsigned long stack_start, unsigned long stack_size)
 {
+    /* allocate a new page to construct a Task. */
     Memory_Page* p = alloc_pages(zone_normal, 1, PG_PTable_Mapped | PG_Kernel);
     Task* task = (Task*)MEM_P2V(p->phy_addr);
     memset(task, 0, sizeof(*task));
     *task = *get_current_task();
+    printk(KERN_INFO "new task address is %p\n", task);
+
     list_init(&task->list);
     list_push_front(&g_init_task_u.task.list, &task->list); /* init -> task */
     ++task->pid;
     task->state = task_uninterruptible;
+
+    /* put the Thread next to the task */
     Thread* thd = (Thread*)(task + 1);
     task->thread = thd;
-    memcpy(regs, (void*)((unsigned long)task + STACK_SIZE - sizeof(pt_regs)), sizeof(pt_regs));
+
+    /* rsp0 is the base pointer of the stack (highest) */
     thd->rsp0 = (unsigned long)task + STACK_SIZE;
     thd->rip = regs->rip;
-    thd->rsp = thd->rsp0 - sizeof(pt_regs);
+    thd->rsp = thd->rsp0 - sizeof(PTrace_regs);
     if (!(task->flags & pf_kthread)) /* if is not a kernel process, process's entry is ret_from_intr */
         thd->rip = regs->rip = (unsigned long)ret_from_intr;
 
+    /* put PTrace_regs at the top of the process stack */
+    memcpy((void*)((unsigned long)task + STACK_SIZE - sizeof(PTrace_regs)), regs, sizeof(PTrace_regs));
+
     task->state = task_running;
+    printk_task(task);
     return 0;
 }
 
 int kernel_thread(unsigned long (*fn)(unsigned long), unsigned long arg, unsigned long flags)
 {
-    pt_regs regs;
+    PTrace_regs regs;
     memset(&regs, 0, sizeof(regs));
     regs.rbx = (unsigned long)fn;
     regs.rdx = (unsigned long)arg;
@@ -211,20 +210,15 @@ void sys_task_init()
     g_init_mm.start_brk = 0;
     g_init_mm.end_brk = gmd->end_brk;
     g_init_mm.start_stack = _stack_start;
-    printk(KERN_INFO "g_init_mm is inited with pml4t %p, start_stack %p\n", g_init_mm.pml4t, to_pointer(g_init_mm.start_stack));
-    /*
-    set_tss64(&g_init_thread, g_init_tss[0].rsp0, g_init_tss[0].rsp1, g_init_tss[0].rsp2,
-        g_init_tss[0].ist1, g_init_tss[0].ist2, g_init_tss[0].ist3, g_init_tss[0].ist4,
-        g_init_tss[0].ist5, g_init_tss[0].ist6, g_init_tss[0].ist7);
-    g_init_tss[0].rsp0 = g_init_thread.rsp0;
-*/
+    printk(KERN_INFO "init task address is 0x%p, and its stack address starts at 0x%p, size is %#018lx\n",
+        &g_init_task_u.task, &g_init_task_u.stack, sizeof(g_init_task_u.stack));
+    printk(KERN_INFO "g_init_mm is inited with pml4t 0x%p, start_stack 0x%p\n", g_init_mm.pml4t, to_pointer(g_init_mm.start_stack));
     printk_tss(g_init_tss);
 
     list_init(&g_init_task_u.task.list);
     kernel_thread(init, 10, CLONE_FS | CLONE_FILES | CLONE_SIGHAND);
     g_init_task_u.task.state = task_running;
     Task* current = get_current_task();
-    printk(KERN_INFO "current task address is %p\n", current);
     Task* next = container_of(list_next(&current->list), Task, list);
     switch_to(current, next);
 }

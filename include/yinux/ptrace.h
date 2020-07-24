@@ -26,4 +26,4 @@ typedef struct
     unsigned long rflags;
     unsigned long rsp;
     unsigned long ss;
-} pt_regs;
+} PTrace_regs;

@@ -142,8 +142,8 @@ entry64:
 // call kernel
     mov         $0x10,          %ax
     mov         %ax,            %gs
-    movq        $0xffff800000007e00, %rsp   /* restore rsp */
-    movq        go_kernel(%rip),%rax
+    movq        _stack_start(%rip), %rsp   /* assign rsp to kernel stack start (32KB) */
+    movq        go_kernel(%rip), %rax
     pushq       $0x08
     pushq       %rax
     lretq
