@@ -1,7 +1,10 @@
 #!/bin/bash
 mkdir -p ../bin
 
-echo "Compiling create_floppy_boot..."
+cd ./freetype-2.10.2
+make
+cd ..
+
 make
 
 echo "Done."

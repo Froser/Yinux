@@ -66,7 +66,7 @@ void sys_cpu_init()
     cpuid(0x80000000, 0, &cpuFac[0], &cpuFac[1], &cpuFac[2], &cpuFac[3]);
     g_cpu.maxextopcode = cpuFac[0];
 
-    printk(KERN_INFO "CPU vendor: %s\nCPU brand: %s\nMax operation code: %#010x\nPhysical address size:  %#ld\nLinear address size: %#ld\n"
+    printk(KERN_INFO "CPU vendor: %s\nCPU brand: %s\nMax operation code: %#010x\nPhysical address size:  %ld\nLinear address size: %ld\n"
         "Family code: %ld\nExtend family: %ld\nModel number: %ld\nExtended model: %ld\nProcessor type: %ld\nStepping ID: %ld\n",
         g_cpu.vendor, g_cpu.brand, g_cpu.maxextopcode, g_cpu.phyaddrsize, g_cpu.linearaddrsize, 
         g_cpu.familyCode, g_cpu.extendFamily, g_cpu.modelNumber, g_cpu.extendedModel, g_cpu.processorType, g_cpu.steppingID);
