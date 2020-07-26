@@ -102,8 +102,10 @@ void sys_memory_init()
     g_mem_descriptor.end_rodata = (unsigned long)&_erodata;
     g_mem_descriptor.end_brk = (unsigned long)&_end;
 
+#if KERNEL_VERBOSE
     printk(KERN_INFO "Section layouts:\n.code: %#018lx-%#018lx\nend of .data:%#018lx\nbrk:%#018lx\n",
         g_mem_descriptor.start_code, g_mem_descriptor.end_code, g_mem_descriptor.end_data, g_mem_descriptor.end_brk);
+#endif
 
     int memcount = *((int*)0xffff800000007e00); /* see also: boot/loader.asm Get_Mem_Info */
     Memory_E820* mem = (Memory_E820*)0xffff800000007e04;
@@ -210,20 +212,15 @@ void sys_memory_init()
         g_mem_descriptor.pages_struct, g_mem_descriptor.pages_size, g_mem_descriptor.pages_length);
     printk(KERN_INFO "Memory descriptor's zones structs start at %p, size is %#018lx, length is %#018lx\n",
         g_mem_descriptor.zones_struct, g_mem_descriptor.zones_size, g_mem_descriptor.zones_length);
+
+#if KERNEL_VERBOSE
     printk(KERN_INFO "Zone details: \n");
     for (int i = 0; i < g_mem_descriptor.zones_size; ++i) {
         Memory_Zone* zone = g_mem_descriptor.zones_struct + i;
         printk(KERN_INFO "Zone start address: %#018lx, end address: %#018lx, length: %#018lx\n", zone->zone_start_addr, zone->zone_end_addr, zone->zone_length);
-
-/*
-        printk(KERN_INFO "Pages details: \n");
-        for (int j = 0; j < zone->pages_length; ++j) {
-            Memory_Page* page = zone->pages_group + j;
-            printk(KERN_INFO "Page physics address: %#018lx\n", page->phy_addr);
-        }
-*/
     }
     printk(KERN_INFO "Memory structs end at %#018lx\n", g_mem_descriptor.end_of_struct);
+#endif
 
     g_kernelCR3 = get_pml4e();
     int i = MEM_V2P(g_mem_descriptor.end_of_struct) >> PAGE_SHIFT;
