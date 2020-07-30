@@ -34,3 +34,25 @@ static void list_push_front(List* entry, List* newEntry)
     newEntry->prev = entry->prev;
     entry->prev = newEntry;
 }
+
+static void list_push_back(List* entry, List* newEntry)
+{
+    newEntry->next = entry->next;
+    newEntry->prev = entry;
+    newEntry->next->prev = newEntry;
+    entry->next = newEntry;
+}
+
+static bool list_is_empty(List* entry)
+{
+    if(entry == entry->next && entry->prev == entry)
+        return true;
+    else
+        return false;
+}
+
+static void list_erase(List* entry)
+{
+    entry->next->prev = entry->prev;
+    entry->prev->next = entry->next;
+}

@@ -62,6 +62,26 @@ static const char* memtypestr(unsigned int type)
     }
 }
 
+Slab_cache kmalloc_cache_size[16] = 
+{
+    {32 ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {64 ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {128    ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {256    ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {512    ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {1024   ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},         //1KB
+    {2048   ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {4096   ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},         //4KB
+    {8192   ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {16384  ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {32768  ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {65536  ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},         //64KB
+    {131072 ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},         //128KB
+    {262144 ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {524288 ,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},
+    {1048576,0  ,0  ,NULL   ,NULL   ,NULL   ,NULL},         //1MB
+};
+
 extern char _text;
 extern char _etext;
 extern char _data;
@@ -70,7 +90,7 @@ extern char _end;
 extern char _rodata;
 extern char _erodata;
 
-unsigned long page_init(Memory_Page* page, unsigned long flags)
+bool page_init(Memory_Page* page, unsigned long flags)
 {
     const unsigned long pagecnt = page->phy_addr >> PAGE_SHIFT;
     if (!page->attribute) {
@@ -89,6 +109,7 @@ unsigned long page_init(Memory_Page* page, unsigned long flags)
         *(g_mem_descriptor.bits_map + (pagecnt >> 6)) |= 1ul << (pagecnt) % 64;
         page->attribute |= flags;
     }
+    return true;
 }
 
 void sys_memory_init()
@@ -280,4 +301,234 @@ Memory_Page* alloc_pages(int zone, int page_count, unsigned long page_flags)
         printk("Cannot alloc page.\n");
         return NULL;
     }
+}
+
+void free_pages(Memory_Page* page,int number)
+{
+
+}
+
+bool page_clean(Memory_Page* page)
+{
+
+}
+
+Slab_cache* slab_create(unsigned long size, SlabStructor constructor, SlabStructor destructor, unsigned long arg)
+{
+    Slab_cache* slab_cache = (Slab_cache*)kmalloc(sizeof(Slab_cache), 0);
+    if (!slab_cache) {
+        printk(KERN_WARNING "Cannot alloc slab_cache\n");
+        return NULL;
+    }
+    memset(slab_cache, 0, sizeof(*slab_cache));
+    slab_cache->size = SIZEOF_LONG_ALIGN(size);
+    slab_cache->total_using = slab_cache->total_free = 0;
+    slab_cache->cache_pool = (Slab*)kmalloc(sizeof(Slab), 0);
+    slab_cache->cache_dma_pool = NULL;
+    slab_cache->constructor = constructor;
+    slab_cache->destructor = destructor;
+    list_init(&slab_cache->cache_pool->list);
+    slab_cache->cache_pool->page = alloc_pages(zone_normal, 1, 0);
+    if (!slab_cache->cache_pool->page) {
+        printk(KERN_WARNING "Cannot alloc page\n");
+        kfree(slab_cache->cache_pool);
+        kfree(slab_cache);
+        return NULL;
+    }
+    page_init(slab_cache->cache_pool->page, PG_Kernel);
+
+    slab_cache->cache_pool->using_count = PAGE_SIZE / slab_cache->size;
+    slab_cache->cache_pool->free_count = slab_cache->cache_pool->using_count;
+    slab_cache->cache_pool->vaddr = MEM_P2V(slab_cache->cache_pool->page->phy_addr);
+    slab_cache->cache_pool->color_count = slab_cache->cache_pool->free_count;
+    slab_cache->cache_pool->color_length = (slab_cache->cache_pool->color_count + sizeof(unsigned long) * 8 - 1) >> 6 << 3;
+    slab_cache->cache_pool->color_map = (unsigned long*)kmalloc(slab_cache->cache_pool->color_length, 0);
+    if (!slab_cache->cache_pool->color_map) {
+        printk(KERN_WARNING "Cannot alloc color_map\n");
+        kfree(slab_cache->cache_pool);
+        kfree(slab_cache);
+        return NULL;
+    }
+
+    memset(slab_cache->cache_pool->color_map, 0, slab_cache->cache_pool->color_length);
+    printk(KERN_INFO "A new slab cache allocated. size: %#018lx, using count: %#018lx, free count: %#018lx, virtual address: %p, color count: %#018lx, color length: %#018lx",
+        slab_cache->size, slab_cache->cache_pool->using_count, slab_cache->cache_pool->free_count, slab_cache->cache_pool->vaddr,
+        slab_cache->cache_pool->color_count, slab_cache->cache_pool->color_length);
+    return slab_cache;
+}
+
+bool slab_destroy(Slab_cache* slab_cache)
+{
+    if (!slab_cache)
+        return false;
+
+    Slab* slab = slab_cache->cache_pool;
+    if (slab_cache->total_using) {
+        /* we still have using slab. Cannot destroy */
+        return false;
+    }
+    while (!list_is_empty(&slab->list)) {
+        Slab* tmp = slab;
+        slab = container_of(list_next(&slab->list), Slab, list);
+        list_erase(&tmp->list);
+
+        /* do some cleaning work*/
+        kfree(tmp->color_map);
+        page_clean(tmp->page);
+        free_pages(tmp->page, 1);
+        kfree(tmp);
+    }
+
+    kfree(slab->color_map);
+    page_clean(slab->page);
+    free_pages(slab->page, 1);
+    kfree(slab);
+    kfree(slab_cache);
+    return true;
+}
+
+void* slab_malloc(Slab_cache* slab_cache, unsigned long arg)
+{
+    Slab* slab = slab_cache->cache_pool;
+    Slab* tmp = NULL;
+    if (!slab_cache->total_free) {
+        /* There's no free slab. We need more */
+        tmp = (Slab*)kmalloc(sizeof(Slab), 0);
+        if (!tmp) {
+            printk(KERN_WARNING "Cannot alloc slab\n");
+            return NULL;
+        }
+        memset(tmp, 0, sizeof(Slab));
+        list_init(&tmp->list);
+        tmp->page = alloc_pages(zone_normal, 1, 0);
+        if (!tmp->page) {
+            printk(KERN_WARNING "Cannot alloc page\n");
+            kfree(tmp);
+            return NULL;
+        }
+
+        page_init(tmp->page, PG_Kernel);
+        tmp->using_count = PAGE_SIZE / slab_cache->size;
+        tmp->free_count = tmp->using_count;
+        tmp->vaddr = MEM_P2V(tmp->page->phy_addr);
+        tmp->color_count = tmp->free_count;
+        tmp->color_length = ((tmp->color_count + sizeof(unsigned long) * 8 - 1) >> 6) << 3;
+        tmp->color_map = (unsigned long*)kmalloc(tmp->color_length, 0);
+
+        if (!tmp->color_map) {
+            printk(KERN_WARNING "Cannot alloc color_map\n");
+            free_pages(tmp->page, 1);
+            kfree(tmp);
+            return NULL;
+        }
+
+        memset(tmp->color_map, 0, tmp->color_length);
+        list_push_back(&slab_cache->cache_pool->list, &tmp->list);
+        slab_cache->total_free += tmp->color_count;
+
+        /* initialize color_map */
+        for (unsigned long i = 0; i < tmp->color_count; ++i) {
+            if ((*(tmp->color_map + (i >> 6)) & (1UL << (i % 64))) == 0) {
+                (*(tmp->color_map + (i >> 6)) |= (1UL << (i % 64)));
+                ++tmp->using_count;
+                --tmp->free_count;
+                ++slab_cache->total_using;
+                --slab_cache->total_free;
+                if (slab_cache->constructor)
+                    return slab_cache->constructor((byte*)tmp->vaddr + slab_cache->size * i, arg);
+
+                return (void*)((byte*)tmp->vaddr + slab_cache->size * i);
+            }
+        }
+    } else {
+        /* we still have free slab */
+        do {
+            if (!slab->free_count) {
+                slab = container_of(list_next(&slab->list), Slab, list);
+                continue;
+            }
+
+            for (unsigned long i = 0; i < slab->color_count; ++i) {
+                if ((*(slab->color_map + (i >> 6)) & (1UL << (i % 64))) == 0) {
+                    (*(slab->color_map + (i >> 6)) |= (1UL << (i % 64)));
+                    ++slab->using_count;
+                    --slab->free_count;
+                    ++slab_cache->total_using;
+                    --slab_cache->total_free;
+                    if (slab_cache->constructor)
+                        return slab_cache->constructor((byte*)slab->vaddr + slab_cache->size * i, arg);
+
+                    return (void*)((byte*)slab->vaddr + slab_cache->size * i);
+                }
+            }
+        } while (slab != slab_cache->cache_pool);
+    }
+
+    if(tmp)
+    {
+        printk(KERN_WARNING "slab_malloc failed.\n");
+        list_erase(&tmp->list);
+        kfree(tmp->color_map);
+        page_clean(tmp->page);
+        free_pages(tmp->page,1);
+        kfree(tmp);
+    }
+}
+
+bool slab_free(Slab_cache* slab_cache, void* address,unsigned long arg)
+{
+    Slab* slab = slab_cache->cache_pool;
+    int index = 0;
+
+    do
+    {
+        if(slab->vaddr <= address && address < slab->vaddr + PAGE_SIZE)
+        {
+            index = (address - slab->vaddr) / slab_cache->size;
+            *(slab->color_map + (index >> 6)) ^= 1UL << index % 64;
+            slab->free_count++;
+            slab->using_count--;
+
+            slab_cache->total_using--;
+            slab_cache->total_free++;
+            
+            if(slab_cache->destructor != NULL)
+            {
+                slab_cache->destructor((char *)slab->vaddr + slab_cache->size * index,arg);
+            }
+
+            if((slab->using_count == 0) && (slab_cache->total_free >= slab->color_count * 3 / 2))
+            {
+                list_erase(&slab->list);
+                slab_cache->total_free -= slab->color_count;
+
+                kfree(slab->color_map);
+                
+                page_clean(slab->page);
+                free_pages(slab->page,1);
+                kfree(slab);
+            }
+
+            return true;
+        }
+        else
+        {
+            slab = container_of(list_next(&slab->list),Slab,list);
+            continue;   
+        }       
+
+    } while(slab != slab_cache->cache_pool);
+
+    printk(KERN_INFO "slab_free() ERROR: address not in slab\n");
+    return false;
+}
+
+void* kmalloc(unsigned long size, unsigned long gfp_flags)
+{
+
+}
+
+bool kfree(void* address)
+{
+
 }

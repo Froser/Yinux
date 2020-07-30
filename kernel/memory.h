@@ -1,5 +1,6 @@
 #pragma once
 #include <yinux/kernel.h>
+#include <yinux/list.h>
 
 struct Memory_Page_t;
 typedef struct {
@@ -76,6 +77,31 @@ typedef struct {
     unsigned long end_of_struct;
 } Global_Memory_Descriptor;
 
+typedef void* (*SlabStructor)(void* vaddr, unsigned long arg);
+struct Slab_t;
+typedef struct {
+    unsigned long size;
+    unsigned long total_using;
+    unsigned long total_free;
+    struct Slab_t* cache_pool;
+    struct Slab_t* cache_dma_pool;
+    SlabStructor constructor;
+    SlabStructor destructor;
+} Slab_cache;
+
+typedef struct Slab_t {
+    List list;
+    Memory_Page* page;
+    unsigned long using_count;
+    unsigned long free_count;
+    void* vaddr;
+    unsigned long color_length;
+    unsigned long color_count;
+    unsigned long* color_map;
+} Slab;
+
+#define SIZEOF_LONG_ALIGN(s)    ((size + sizeof(long) - 1) & ~(sizeof(long) - 1))
+
 #define PAGE_OFFSET     ((unsigned long)0xffff800000000000)
 
 /* Virtual address to physics address */
@@ -113,3 +139,5 @@ void sys_memory_init();
 unsigned long* get_kernel_CR3();
 const Global_Memory_Descriptor* get_kernel_memdesc();
 Memory_Page* alloc_pages(int zone, int page_count, unsigned long page_flags);
+void* kmalloc(unsigned long size, unsigned long gfp_flags);
+bool kfree(void* address);
