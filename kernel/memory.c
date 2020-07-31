@@ -323,10 +323,12 @@ Slab_cache* slab_create(unsigned long size, SlabStructor constructor, SlabStruct
     memset(slab_cache, 0, sizeof(*slab_cache));
     slab_cache->size = SIZEOF_LONG_ALIGN(size);
     slab_cache->total_using = slab_cache->total_free = 0;
-    slab_cache->cache_pool = (Slab*)kmalloc(sizeof(Slab), 0);
     slab_cache->cache_dma_pool = NULL;
     slab_cache->constructor = constructor;
     slab_cache->destructor = destructor;
+
+    /* allocate slab instance */
+    slab_cache->cache_pool = (Slab*)kmalloc(sizeof(Slab), 0);
     list_init(&slab_cache->cache_pool->list);
     slab_cache->cache_pool->page = alloc_pages(zone_normal, 1, 0);
     if (!slab_cache->cache_pool->page) {
@@ -337,8 +339,9 @@ Slab_cache* slab_create(unsigned long size, SlabStructor constructor, SlabStruct
     }
     page_init(slab_cache->cache_pool->page, PG_Kernel);
 
-    slab_cache->cache_pool->using_count = PAGE_SIZE / slab_cache->size;
-    slab_cache->cache_pool->free_count = slab_cache->cache_pool->using_count;
+    slab_cache->cache_pool->using_count = 0;
+    slab_cache->cache_pool->free_count = PAGE_SIZE / slab_cache->size;
+    slab_cache->total_free = slab_cache->cache_pool->free_count;
     slab_cache->cache_pool->vaddr = MEM_P2V(slab_cache->cache_pool->page->phy_addr);
     slab_cache->cache_pool->color_count = slab_cache->cache_pool->free_count;
     slab_cache->cache_pool->color_length = (slab_cache->cache_pool->color_count + sizeof(unsigned long) * 8 - 1) >> 6 << 3;
@@ -521,6 +524,15 @@ bool slab_free(Slab_cache* slab_cache, void* address,unsigned long arg)
 
     printk(KERN_INFO "slab_free() ERROR: address not in slab\n");
     return false;
+}
+
+bool slab_init()
+{
+    Memory_Page* page;
+    const int count = sizeof(kmalloc_cache_size) / sizeof(kmalloc_cache_size[0]);
+    for (unsigned long i = 0; i < count; ++i) {
+
+    }
 }
 
 void* kmalloc(unsigned long size, unsigned long gfp_flags)
